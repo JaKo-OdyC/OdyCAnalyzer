@@ -12,15 +12,31 @@ export default function DocumentationPreview() {
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string>("");
   const [selectedFormat, setSelectedFormat] = useState<string>("markdown");
 
+  // Get all analysis runs to find the latest one
+  const { data: allAnalysisRuns = [] } = useQuery({
+    queryKey: ['/api/analysis'],
+    queryFn: async () => {
+      const response = await fetch('/api/logs');
+      const logs = await response.json();
+      // Extract unique analysis run IDs from logs
+      const analysisIds = [...new Set(logs.map((log: any) => log.analysisRunId))].filter(Boolean);
+      return analysisIds.sort((a: number, b: number) => b - a); // Latest first
+    },
+  });
+
+  // Auto-select the latest analysis if none selected
+  const latestAnalysisId = allAnalysisRuns[0]?.toString() || "";
+  const currentAnalysisId = selectedAnalysisId || latestAnalysisId;
+
   const { data: outputs = [] } = useQuery<DocumentationOutput[]>({
-    queryKey: ['/api/analysis', selectedAnalysisId, 'output'],
-    enabled: !!selectedAnalysisId,
+    queryKey: ['/api/analysis', currentAnalysisId, 'output'],
+    enabled: !!currentAnalysisId,
   });
 
   const selectedOutput = outputs.find(output => output.format === selectedFormat);
 
   const handleExport = async () => {
-    if (!selectedAnalysisId || !selectedFormat) {
+    if (!currentAnalysisId || !selectedFormat) {
       toast({
         title: "Export failed",
         description: "Please select an analysis and format to export.",
@@ -30,7 +46,7 @@ export default function DocumentationPreview() {
     }
 
     try {
-      const response = await fetch(`/api/analysis/${selectedAnalysisId}/export/${selectedFormat}`);
+      const response = await fetch(`/api/analysis/${currentAnalysisId}/export/${selectedFormat}`);
       if (!response.ok) {
         throw new Error('Export failed');
       }
@@ -39,7 +55,7 @@ export default function DocumentationPreview() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `analysis-${selectedAnalysisId}.${selectedFormat}`;
+      a.download = `analysis-${currentAnalysisId}.${selectedFormat}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -77,6 +93,11 @@ export default function DocumentationPreview() {
           <div className="flex items-center">
             <FileText className="text-primary-500 mr-2" size={20} />
             Generated Documentation Preview
+            {allAnalysisRuns.length > 0 && (
+              <span className="ml-2 text-sm text-gray-500">
+                (Analysis #{currentAnalysisId})
+              </span>
+            )}
           </div>
           <div className="flex items-center space-x-2">
             <Select value={selectedFormat} onValueChange={setSelectedFormat}>
@@ -102,7 +123,7 @@ export default function DocumentationPreview() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {!selectedAnalysisId ? (
+        {!currentAnalysisId ? (
           <div className="bg-gray-50 rounded-lg p-6 border-l-4 border-primary-500">
             <div className="text-center">
               <FileText className="mx-auto text-gray-400 mb-4" size={48} />
