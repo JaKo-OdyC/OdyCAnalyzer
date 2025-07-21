@@ -1,0 +1,178 @@
+Project Structure
+
+odyc-multiagent/
+├── data/
+│   └── sample_odyc_export.json
+├── src/
+│   ├── __init__.py
+│   ├── parse.py
+│   ├── orchestrator.py
+│   ├── output.py
+│   └── agents/
+│       ├── __init__.py
+│       ├── structure_agent.py
+│       ├── requirements_agent.py
+│       ├── user_perspective_agent.py
+│       ├── documentation_agent.py
+│       └── meta_agent.py
+├── requirements.txt
+├── README.md
+└── .gitignore
+
+File Descriptions & Minimal Content
+data/sample_odyc_export.json
+
+{
+  "messages": [
+    {
+      "timestamp": "2025-07-21T12:34:56",
+      "role": "user",
+      "content": "I think we should modularize the atomic structure.",
+      "topic": "atomic structure"
+    },
+    {
+      "timestamp": "2025-07-21T12:36:10",
+      "role": "assistant",
+      "content": "Modularization can improve reusability and maintainability.",
+      "topic": "atomic structure"
+    }
+  ]
+}
+
+src/parse.py
+
+import json
+
+def load_data(filename):
+    with open(filename, 'r') as f:
+        return json.load(f)
+
+def segment_by_topic(messages):
+    segments = {}
+    for msg in messages:
+        topic = msg.get("topic", "general")
+        if topic not in segments:
+            segments[topic] = []
+        segments[topic].append(msg)
+    return segments
+
+if __name__ == '__main__':
+    data = load_data('../data/sample_odyc_export.json')
+    messages = data['messages']
+    segments = segment_by_topic(messages)
+    for topic, msgs in segments.items():
+        print(f"=== {topic.upper()} ===")
+        for m in msgs:
+            print(m['timestamp'], m['role'], m['content'])
+
+src/agents/structure_agent.py
+
+def suggest_structure(segment):
+    # Dummy example: return section headers for each user/assistant pair
+    headers = []
+    for msg in segment:
+        if msg["role"] == "user":
+            headers.append(f"Section: {msg['content'][:30]}...")
+    return headers
+
+if __name__ == "__main__":
+    # Minimal test
+    sample_segment = [
+        {"role": "user", "content": "How should we start?", "timestamp": "2025-07-21T12:01:00"},
+        {"role": "assistant", "content": "Start by defining goals.", "timestamp": "2025-07-21T12:01:10"},
+    ]
+    print(suggest_structure(sample_segment))
+
+src/orchestrator.py
+
+from parse import load_data, segment_by_topic
+from agents.structure_agent import suggest_structure
+
+def main():
+    data = load_data('../data/sample_odyc_export.json')
+    segments = segment_by_topic(data['messages'])
+    for topic, segment in segments.items():
+        print(f"\n--- Topic: {topic} ---")
+        structure = suggest_structure(segment)
+        print("Suggested structure:", structure)
+
+if __name__ == '__main__':
+    main()
+
+src/output.py
+
+def write_markdown(topic, structure, filename="output.md"):
+    with open(filename, "a") as f:
+        f.write(f"# {topic}\n")
+        for section in structure:
+            f.write(f"## {section}\n\n")
+
+if __name__ == "__main__":
+    # Minimal example
+    write_markdown("Atomic Structure", ["Section: Introduction", "Section: Use Cases"])
+
+requirements.txt
+
+# No external dependencies required for starter kit.
+# Add 'openai', 'langchain', etc. as needed.
+
+README.md
+
+# OdyC Multi-Agent Documentation Analyzer (Starter Kit)
+
+This project is a starting point for analyzing and structuring exported OdyC chat/project data using a modular, multi-agent approach.
+
+## Features
+
+- Loads exported chat data (JSON)
+- Segments by topic
+- Runs specialized "agent" functions (e.g., structure suggestions)
+- Modular and extensible for more agents and outputs
+
+## How to Run
+
+```bash
+python src/orchestrator.py
+
+Structure
+
+    data/ — Example OdyC exports
+
+    src/ — Core logic and agents
+
+    src/agents/ — Modular agents for different analysis tasks
+
+    output.py — Markdown output writer
+
+Next Steps
+
+    Add more agents (requirements, user perspective, etc.)
+
+    Integrate with OpenAI or other APIs
+
+    Expand output formats
+
+
+---
+
+### `.gitignore`
+
+*.pyc
+pycache/
+output.md
+
+
+---
+
+## **How to Use/Extend**
+
+- Run `python src/orchestrator.py` to test the end-to-end pipeline.
+- Add logic to each agent in `src/agents/`.
+- Integrate OpenAI/Gemini APIs as needed (and add to `requirements.txt`).
+- Use `output.py` to generate full documentation drafts.
+- Push to GitHub for collaborative work.
+
+---
+
+**Want a more advanced template (e.g. with LangChain, agent orchestration, or REST API endpoints)?**  
+Just tell me which part you want to expand, and I’ll deliver the code!
