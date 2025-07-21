@@ -23,7 +23,7 @@ export class AgentOrchestrator {
 
     try {
       await this.storage.updateAnalysisRunStatus(analysisRunId, 'running');
-      await this.logMessage(analysisRunId, null, 'info', 'Starting AI-powered analysis pipeline');
+      await this.logMessage(analysisRunId, null, 'info', 'Starting analysis pipeline');
 
       const file = await this.storage.getFile(analysisRun.fileId!);
       if (!file) {
@@ -40,7 +40,7 @@ export class AgentOrchestrator {
       const allAgents = await this.storage.getAllAgents();
       const enabledAgents = allAgents.filter(agent => agent.enabled);
 
-      await this.logMessage(analysisRunId, null, 'info', `Running ${enabledAgents.length} AI agents with ${aiService.getAvailableProviders().join(', ')}`);
+      await this.logMessage(analysisRunId, null, 'info', `Running ${enabledAgents.length} agents`);
 
       // Run each agent
       const agentResults: Record<string, any> = {};
@@ -80,7 +80,7 @@ export class AgentOrchestrator {
 
       // Complete the analysis
       await this.storage.completeAnalysisRun(analysisRunId, agentResults);
-      await this.logMessage(analysisRunId, null, 'info', 'AI analysis completed successfully');
+      await this.logMessage(analysisRunId, null, 'info', 'Analysis completed successfully');
 
     } catch (error) {
       await this.storage.updateAnalysisRunStatus(analysisRunId, 'failed');
@@ -109,7 +109,7 @@ export class AgentOrchestrator {
   }
 
   private async runStructureAgent(messages: ChatMessage[], config: any, analysisRunId: number, agentId: number): Promise<any> {
-    await this.logMessage(analysisRunId, agentId, 'info', `Processing ${messages.length} messages with AI`);
+    await this.logMessage(analysisRunId, agentId, 'info', `Processing ${messages.length} messages`);
 
     const messageContent = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
     
@@ -130,20 +130,20 @@ Format: {"sections": [...], "topicGroups": [...], "insights": [...]}`;
       const response = await aiService.smartCall(prompt, systemPrompt, 'openai');
       const result = JSON.parse(response.content);
       
-      await this.logMessage(analysisRunId, agentId, 'info', `AI identified ${result.sections?.length || 0} sections using ${response.model}`);
+      await this.logMessage(analysisRunId, agentId, 'info', `AI identified ${result.sections?.length || 0} sections and ${result.topicGroups?.length || 0} topic groups`);
       
       return {
         sections: result.sections || [],
         topicGroups: result.topicGroups || [],
-        insights: result.insights || [],
         messageCount: messages.length,
         topicCount: result.topicGroups?.length || 0,
+        insights: result.insights || [],
         aiModel: response.model,
         aiProvider: response.provider
       };
     } catch (error) {
-      await this.logMessage(analysisRunId, agentId, 'warn', `AI analysis failed: ${error}`);
-      throw error;
+      await this.logMessage(analysisRunId, agentId, 'warn', `AI analysis failed, using fallback: ${error}`);
+      return this.runStructureAgentFallback(messages, config, analysisRunId, agentId);
     }
   }
 
@@ -158,7 +158,7 @@ ${messageContent}
 
 Identify and categorize requirements as:
 - functional: What the system should do
-- non_functional: Performance, security, usability requirements  
+- non-functional: Performance, security, usability requirements  
 - technical: Implementation, architecture, technology requirements
 
 Provide a JSON response:
@@ -169,7 +169,7 @@ Provide a JSON response:
       const result = JSON.parse(response.content);
       
       const totalRequirements = (result.functional?.length || 0) + (result.non_functional?.length || 0) + (result.technical?.length || 0);
-      await this.logMessage(analysisRunId, agentId, 'info', `AI extracted ${totalRequirements} requirements using ${response.model}`);
+      await this.logMessage(analysisRunId, agentId, 'info', `AI extracted ${totalRequirements} requirements`);
       
       return {
         functional: result.functional || [],
@@ -182,8 +182,8 @@ Provide a JSON response:
         aiProvider: response.provider
       };
     } catch (error) {
-      await this.logMessage(analysisRunId, agentId, 'warn', `AI analysis failed: ${error}`);
-      throw error;
+      await this.logMessage(analysisRunId, agentId, 'warn', `AI analysis failed, using fallback: ${error}`);
+      return this.runRequirementsAgentFallback(messages, config, analysisRunId, agentId);
     }
   }
 
@@ -209,7 +209,7 @@ Provide a JSON response:
       const response = await aiService.smartCall(prompt, systemPrompt, 'anthropic');
       const result = JSON.parse(response.content);
       
-      await this.logMessage(analysisRunId, agentId, 'info', `AI identified ${result.personas?.length || 0} personas using ${response.model}`);
+      await this.logMessage(analysisRunId, agentId, 'info', `AI identified ${result.personas?.length || 0} personas and ${result.needs?.length || 0} user needs`);
       
       return {
         personas: result.personas || [],
@@ -221,8 +221,8 @@ Provide a JSON response:
         aiProvider: response.provider
       };
     } catch (error) {
-      await this.logMessage(analysisRunId, agentId, 'warn', `AI analysis failed: ${error}`);
-      throw error;
+      await this.logMessage(analysisRunId, agentId, 'warn', `AI analysis failed, using fallback: ${error}`);
+      return this.runUserPerspectiveAgentFallback(messages, config, analysisRunId, agentId);
     }
   }
 
@@ -248,7 +248,7 @@ Provide a JSON response:
       const response = await aiService.smartCall(prompt, systemPrompt, 'anthropic');
       const result = JSON.parse(response.content);
       
-      await this.logMessage(analysisRunId, agentId, 'info', `AI identified ${result.gaps?.length || 0} documentation gaps using ${response.model}`);
+      await this.logMessage(analysisRunId, agentId, 'info', `AI identified ${result.gaps?.length || 0} documentation gaps`);
       
       return {
         gaps: result.gaps || [],
@@ -261,8 +261,8 @@ Provide a JSON response:
         aiProvider: response.provider
       };
     } catch (error) {
-      await this.logMessage(analysisRunId, agentId, 'warn', `AI analysis failed: ${error}`);
-      throw error;
+      await this.logMessage(analysisRunId, agentId, 'warn', `AI analysis failed, using fallback: ${error}`);
+      return this.runDocumentationAgentFallback(messages, config, analysisRunId, agentId);
     }
   }
 
@@ -288,7 +288,7 @@ Provide a JSON response:
       const response = await aiService.smartCall(prompt, systemPrompt, 'anthropic');
       const result = JSON.parse(response.content);
       
-      await this.logMessage(analysisRunId, agentId, 'info', `AI generated ${result.insights?.length || 0} meta insights using ${response.model}`);
+      await this.logMessage(analysisRunId, agentId, 'info', `AI generated ${result.insights?.length || 0} meta insights`);
       
       return {
         insights: result.insights || [],
@@ -303,9 +303,87 @@ Provide a JSON response:
         aiProvider: response.provider
       };
     } catch (error) {
-      await this.logMessage(analysisRunId, agentId, 'warn', `AI analysis failed: ${error}`);
-      throw error;
+      await this.logMessage(analysisRunId, agentId, 'warn', `AI analysis failed, using fallback: ${error}`);
+      return this.runMetaAgentFallback(messages, config, analysisRunId, agentId);
     }
+  }
+
+  // Fallback methods for when AI fails
+  private async runStructureAgentFallback(messages: ChatMessage[], config: any, analysisRunId: number, agentId: number): Promise<any> {
+    const topicGroups = this.groupMessagesByTopic(messages);
+    const sections = ['Executive Summary', 'Overview', 'General', 'Next Steps', 'Conclusion'];
+    
+    return {
+      sections,
+      topicGroups: Object.keys(topicGroups),
+      messageCount: messages.length,
+      topicCount: Object.keys(topicGroups).length,
+      fallbackUsed: true
+    };
+  }
+
+  private async runRequirementsAgentFallback(messages: ChatMessage[], config: any, analysisRunId: number, agentId: number): Promise<any> {
+    const requirements: string[] = [];
+    const requirementKeywords = ['should', 'must', 'require', 'need', 'implement'];
+
+    for (const message of messages) {
+      if (requirementKeywords.some(keyword => message.content.toLowerCase().includes(keyword))) {
+        requirements.push(message.content.substring(0, 100) + '...');
+      }
+    }
+
+    return {
+      functional: requirements.slice(0, 5),
+      nonFunctional: [],
+      technical: [],
+      summary: 'Basic keyword-based extraction',
+      totalMessages: messages.length,
+      requirementDensity: requirements.length / messages.length,
+      fallbackUsed: true
+    };
+  }
+
+  private async runUserPerspectiveAgentFallback(messages: ChatMessage[], config: any, analysisRunId: number, agentId: number): Promise<any> {
+    const userMentions = messages.filter(m => m.content.toLowerCase().includes('user')).length;
+    
+    return {
+      personas: [],
+      userNeeds: [],
+      feedback: [],
+      insights: ['Basic user mention analysis'],
+      totalMessages: messages.length,
+      fallbackUsed: true
+    };
+  }
+
+  private async runDocumentationAgentFallback(messages: ChatMessage[], config: any, analysisRunId: number, agentId: number): Promise<any> {
+    const questionMarks = messages.filter(m => m.content.includes('?')).length;
+    
+    return {
+      gaps: [],
+      suggestions: ['Review conversation for missing context'],
+      priorities: ['high', 'medium', 'low'],
+      topics: [],
+      totalMessages: messages.length,
+      gapDensity: questionMarks / messages.length,
+      fallbackUsed: true
+    };
+  }
+
+  private async runMetaAgentFallback(messages: ChatMessage[], config: any, analysisRunId: number, agentId: number): Promise<any> {
+    const messagesByRole = this.getMessagesByRole(messages);
+    
+    return {
+      insights: ['Basic conversation analysis', 'Message distribution by role', 'Limited meta-analysis available'],
+      patterns: [],
+      themes: [],
+      qualityAssessment: 'Basic analysis only',
+      messageStats: {
+        total: messages.length,
+        byRole: messagesByRole,
+      },
+      fallbackUsed: true
+    };
   }
 
   private getMessagesByRole(messages: ChatMessage[]): Record<string, ChatMessage[]> {
@@ -318,6 +396,124 @@ Provide a JSON response:
     }
     return byRole;
   }
+      '?', 'how', 'what', 'why', 'when', 'where', 'todo', 'fixme'
+    ];
+
+    for (const message of messages) {
+      const content = message.content.toLowerCase();
+      
+      if (gapIndicators.some(indicator => content.includes(indicator))) {
+        documentationGaps.push(message.content);
+      }
+    }
+
+    await this.logMessage(analysisRunId, agentId, 'info', `Identified ${documentationGaps.length} potential documentation gaps`);
+
+    return {
+      documentationGaps: documentationGaps.slice(0, 15),
+      gapTypes,
+      totalMessages: messages.length,
+      gapDensity: documentationGaps.length / messages.length,
+    };
+  }
+
+  private async runMetaAgent(messages: ChatMessage[], config: any, analysisRunId: number, agentId: number): Promise<any> {
+    const metaInsights: string[] = [];
+
+    // Analyze message patterns
+    const messagesByRole = this.groupMessagesByRole(messages);
+    const topicGroups = this.groupMessagesByTopic(messages);
+
+    // Check for balance between user and assistant messages
+    const userMessages = messagesByRole.user?.length || 0;
+    const assistantMessages = messagesByRole.assistant?.length || 0;
+    const messageRatio = userMessages / (assistantMessages || 1);
+
+    if (messageRatio > 2) {
+      metaInsights.push('Heavy user input - may indicate complex requirements gathering phase');
+    } else if (messageRatio < 0.5) {
+      metaInsights.push('Heavy assistant output - may indicate explanation or documentation phase');
+    } else {
+      metaInsights.push('Balanced conversation - good collaborative discussion');
+    }
+
+    // Analyze topic diversity
+    const topicCount = Object.keys(topicGroups).length;
+    if (topicCount > messages.length * 0.3) {
+      metaInsights.push('High topic diversity - broad scope discussion');
+    } else if (topicCount < messages.length * 0.1) {
+      metaInsights.push('Low topic diversity - focused discussion');
+    }
+
+    // Check for recurring themes
+    const wordFrequency = this.calculateWordFrequency(messages);
+    const topWords = Object.entries(wordFrequency)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 5)
+      .map(([word]) => word);
+
+    metaInsights.push(`Key recurring themes: ${topWords.join(', ')}`);
+
+    await this.logMessage(analysisRunId, agentId, 'info', `Generated ${metaInsights.length} meta insights`);
+
+    return {
+      metaInsights,
+      messageStats: {
+        total: messages.length,
+        byRole: messagesByRole,
+        topicCount,
+        messageRatio: Math.round(messageRatio * 100) / 100,
+      },
+      topWords,
+      analysisQuality: metaInsights.length > 3 ? 'comprehensive' : 'basic',
+    };
+  }
+
+  private groupMessagesByTopic(messages: ChatMessage[]): Record<string, ChatMessage[]> {
+    const groups: Record<string, ChatMessage[]> = {};
+    
+    for (const message of messages) {
+      const topic = message.topic || 'general';
+      if (!groups[topic]) {
+        groups[topic] = [];
+      }
+      groups[topic].push(message);
+    }
+
+    return groups;
+  }
+
+  private groupMessagesByRole(messages: ChatMessage[]): Record<string, ChatMessage[]> {
+    const groups: Record<string, ChatMessage[]> = {};
+    
+    for (const message of messages) {
+      if (!groups[message.role]) {
+        groups[message.role] = [];
+      }
+      groups[message.role].push(message);
+    }
+
+    return groups;
+  }
+
+  private calculateWordFrequency(messages: ChatMessage[]): Record<string, number> {
+    const frequency: Record<string, number> = {};
+    const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those']);
+
+    for (const message of messages) {
+      const words = message.content
+        .toLowerCase()
+        .replace(/[^\w\s]/g, ' ')
+        .split(/\s+/)
+        .filter(word => word.length > 3 && !commonWords.has(word));
+
+      for (const word of words) {
+        frequency[word] = (frequency[word] || 0) + 1;
+      }
+    }
+
+    return frequency;
+  }
 
   private async logMessage(analysisRunId: number, agentId: number | null, level: string, message: string, data?: any): Promise<void> {
     await this.storage.createAgentLog({
@@ -325,7 +521,7 @@ Provide a JSON response:
       agentId,
       level,
       message,
-      data: data ? JSON.stringify(data) : null,
+      data,
     });
   }
 }
