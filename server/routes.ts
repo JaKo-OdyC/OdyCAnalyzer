@@ -1,0 +1,235 @@
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { insertFileSchema, insertAnalysisRunSchema } from "@shared/schema";
+import { AgentOrchestrator } from "./services/agent-orchestrator";
+import { FileProcessor } from "./services/file-processor";
+import multer from "multer";
+import { z } from "zod";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['application/json', 'text/plain', 'text/markdown'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JSON, TXT, and Markdown files are allowed.'));
+    }
+  }
+});
+
+const orchestrator = new AgentOrchestrator(storage);
+const fileProcessor = new FileProcessor(storage);
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // File upload endpoint
+  app.post("/api/files/upload", upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file provided" });
+      }
+
+      const fileData = {
+        filename: `${Date.now()}-${req.file.originalname}`,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        contentType: req.file.mimetype,
+        processed: false,
+        content: req.file.buffer.toString('utf8'),
+      };
+
+      const validatedFile = insertFileSchema.parse(fileData);
+      const file = await storage.createFile(validatedFile);
+
+      // Process the file in the background
+      fileProcessor.processFile(file.id).catch(console.error);
+
+      res.json(file);
+    } catch (error) {
+      console.error("File upload error:", error);
+      res.status(500).json({ message: "Failed to upload file" });
+    }
+  });
+
+  // Get all uploaded files
+  app.get("/api/files", async (req, res) => {
+    try {
+      const files = await storage.getAllFiles();
+      res.json(files);
+    } catch (error) {
+      console.error("Get files error:", error);
+      res.status(500).json({ message: "Failed to retrieve files" });
+    }
+  });
+
+  // Delete a file
+  app.delete("/api/files/:id", async (req, res) => {
+    try {
+      const fileId = parseInt(req.params.id);
+      await storage.deleteFile(fileId);
+      res.json({ message: "File deleted successfully" });
+    } catch (error) {
+      console.error("Delete file error:", error);
+      res.status(500).json({ message: "Failed to delete file" });
+    }
+  });
+
+  // Get all agents
+  app.get("/api/agents", async (req, res) => {
+    try {
+      const agents = await storage.getAllAgents();
+      res.json(agents);
+    } catch (error) {
+      console.error("Get agents error:", error);
+      res.status(500).json({ message: "Failed to retrieve agents" });
+    }
+  });
+
+  // Update agent configuration
+  app.patch("/api/agents/:id", async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const updates = req.body;
+      await storage.updateAgent(agentId, updates);
+      const updatedAgent = await storage.getAgent(agentId);
+      res.json(updatedAgent);
+    } catch (error) {
+      console.error("Update agent error:", error);
+      res.status(500).json({ message: "Failed to update agent" });
+    }
+  });
+
+  // Start analysis
+  app.post("/api/analysis/start", async (req, res) => {
+    try {
+      const { fileId } = req.body;
+      
+      if (!fileId) {
+        return res.status(400).json({ message: "File ID is required" });
+      }
+
+      const file = await storage.getFile(fileId);
+      if (!file) {
+        return res.status(404).json({ message: "File not found" });
+      }
+
+      if (!file.processed) {
+        return res.status(400).json({ message: "File is still being processed" });
+      }
+
+      const analysisRun = await storage.createAnalysisRun({
+        fileId,
+        status: 'pending',
+        results: null,
+      });
+
+      // Start analysis in background
+      orchestrator.runAnalysis(analysisRun.id).catch(console.error);
+
+      res.json(analysisRun);
+    } catch (error) {
+      console.error("Start analysis error:", error);
+      res.status(500).json({ message: "Failed to start analysis" });
+    }
+  });
+
+  // Get analysis run status
+  app.get("/api/analysis/:id", async (req, res) => {
+    try {
+      const analysisId = parseInt(req.params.id);
+      const analysisRun = await storage.getAnalysisRun(analysisId);
+      
+      if (!analysisRun) {
+        return res.status(404).json({ message: "Analysis run not found" });
+      }
+
+      res.json(analysisRun);
+    } catch (error) {
+      console.error("Get analysis error:", error);
+      res.status(500).json({ message: "Failed to retrieve analysis" });
+    }
+  });
+
+  // Get analysis runs for a file
+  app.get("/api/files/:fileId/analysis", async (req, res) => {
+    try {
+      const fileId = parseInt(req.params.fileId);
+      const analysisRuns = await storage.getAnalysisRunsByFileId(fileId);
+      res.json(analysisRuns);
+    } catch (error) {
+      console.error("Get file analysis error:", error);
+      res.status(500).json({ message: "Failed to retrieve analysis runs" });
+    }
+  });
+
+  // Get recent logs
+  app.get("/api/logs", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const logs = await storage.getRecentLogs(limit);
+      res.json(logs);
+    } catch (error) {
+      console.error("Get logs error:", error);
+      res.status(500).json({ message: "Failed to retrieve logs" });
+    }
+  });
+
+  // Get logs for specific analysis run
+  app.get("/api/analysis/:id/logs", async (req, res) => {
+    try {
+      const analysisId = parseInt(req.params.id);
+      const logs = await storage.getLogsByAnalysisRunId(analysisId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Get analysis logs error:", error);
+      res.status(500).json({ message: "Failed to retrieve analysis logs" });
+    }
+  });
+
+  // Get documentation output
+  app.get("/api/analysis/:id/output", async (req, res) => {
+    try {
+      const analysisId = parseInt(req.params.id);
+      const outputs = await storage.getOutputsByAnalysisRunId(analysisId);
+      res.json(outputs);
+    } catch (error) {
+      console.error("Get output error:", error);
+      res.status(500).json({ message: "Failed to retrieve output" });
+    }
+  });
+
+  // Export documentation
+  app.get("/api/analysis/:id/export/:format", async (req, res) => {
+    try {
+      const analysisId = parseInt(req.params.id);
+      const format = req.params.format;
+      
+      const outputs = await storage.getOutputsByAnalysisRunId(analysisId);
+      const output = outputs.find(o => o.format === format);
+      
+      if (!output) {
+        return res.status(404).json({ message: `No ${format} output found` });
+      }
+
+      const mimeTypes = {
+        markdown: 'text/markdown',
+        html: 'text/html',
+        json: 'application/json',
+      };
+
+      res.setHeader('Content-Type', mimeTypes[format as keyof typeof mimeTypes] || 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="analysis-${analysisId}.${format}"`);
+      res.send(output.content);
+    } catch (error) {
+      console.error("Export error:", error);
+      res.status(500).json({ message: "Failed to export documentation" });
+    }
+  });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}
