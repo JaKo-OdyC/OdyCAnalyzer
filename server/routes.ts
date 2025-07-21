@@ -1,9 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertFileSchema, insertAnalysisRunSchema } from "@shared/schema";
+import { insertFileSchema, insertAnalysisRunSchema, urlAnalysisSchema } from "@shared/schema";
 import { AgentOrchestrator } from "./services/agent-orchestrator";
 import { FileProcessor } from "./services/file-processor";
+import { UrlProcessor } from "./services/url-processor";
 import multer from "multer";
 import { z } from "zod";
 
@@ -24,6 +25,7 @@ const upload = multer({
 
 const orchestrator = new AgentOrchestrator(storage);
 const fileProcessor = new FileProcessor(storage);
+const urlProcessor = new UrlProcessor(storage);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // File upload endpoint
@@ -40,6 +42,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contentType: req.file.mimetype,
         processed: false,
         content: req.file.buffer.toString('utf8'),
+        sourceType: 'file',
       };
 
       const validatedFile = insertFileSchema.parse(fileData);
@@ -52,6 +55,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("File upload error:", error);
       res.status(500).json({ message: "Failed to upload file" });
+    }
+  });
+
+  // URL analysis endpoint
+  app.post("/api/files/analyze-url", async (req, res) => {
+    try {
+      const { url } = urlAnalysisSchema.parse(req.body);
+      
+      // Process URL in the background
+      const file = await urlProcessor.processUrl(url);
+      
+      // Process the extracted content
+      fileProcessor.processFile(file.id).catch(console.error);
+
+      res.json(file);
+    } catch (error) {
+      console.error("URL analysis error:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to analyze URL" 
+      });
     }
   });
 

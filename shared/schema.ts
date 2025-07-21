@@ -11,6 +11,8 @@ export const uploadedFiles = pgTable("uploaded_files", {
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
   processed: boolean("processed").default(false).notNull(),
   content: text("content"),
+  sourceUrl: text("source_url"), // URL for ChatGPT share links or other sources
+  sourceType: text("source_type").default("file"), // 'file', 'chatgpt_share', 'url'
 });
 
 export const chatMessages = pgTable("chat_messages", {
@@ -65,6 +67,11 @@ export const documentationOutput = pgTable("documentation_output", {
 export const insertFileSchema = createInsertSchema(uploadedFiles).omit({
   id: true,
   uploadedAt: true,
+});
+
+// URL processing schema
+export const urlAnalysisSchema = z.object({
+  url: z.string().url("Please provide a valid URL"),
 });
 
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
@@ -122,3 +129,4 @@ export const analysisResultSchema = z.object({
 });
 
 export type AnalysisResult = z.infer<typeof analysisResultSchema>;
+export type UrlAnalysis = z.infer<typeof urlAnalysisSchema>;

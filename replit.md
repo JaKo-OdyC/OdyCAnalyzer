@@ -41,11 +41,12 @@ The core innovation is a modular agent orchestration system that processes uploa
 ## Key Components
 
 ### Data Flow Architecture
-1. **File Upload**: Users upload JSON, Markdown, or TXT files containing chat data
+1. **Data Input**: Users can either upload files (JSON, Markdown, TXT) OR analyze ChatGPT shared conversation URLs
 2. **File Processing**: Background service parses files and extracts chat messages
-3. **Agent Orchestration**: Multiple specialized agents analyze the data in parallel
-4. **Result Aggregation**: Agent outputs are combined and stored
-5. **Documentation Generation**: Markdown reports are generated from analysis results
+3. **URL Processing**: Web scraper extracts conversation data from ChatGPT share links
+4. **Agent Orchestration**: Multiple specialized agents analyze the data in parallel
+5. **Result Aggregation**: Agent outputs are combined and stored
+6. **Documentation Generation**: Markdown reports are generated from analysis results
 
 ### Database Schema
 The PostgreSQL schema supports the complete workflow:
@@ -61,7 +62,8 @@ The PostgreSQL schema supports the complete workflow:
 RESTful endpoints handle all operations:
 
 - `POST /api/files/upload`: File upload with validation
-- `GET /api/files`: List uploaded files
+- `POST /api/files/analyze-url`: Analyze ChatGPT share URLs and other conversation links
+- `GET /api/files`: List uploaded files and URL-extracted conversations
 - `POST /api/analysis/start`: Begin multi-agent analysis
 - `GET /api/analysis/:id`: Check analysis progress
 - `GET /api/agents`: Manage agent configuration
@@ -70,7 +72,8 @@ RESTful endpoints handle all operations:
 ### Component Architecture
 The frontend uses a modular component system:
 
-- **FileUpload**: Drag-and-drop file handling with validation
+- **FileUpload**: Tabbed interface supporting both drag-and-drop file upload AND ChatGPT URL analysis
+- **UrlProcessor**: Backend service for scraping and extracting ChatGPT conversation data
 - **AgentCard**: Individual agent configuration and status
 - **AnalysisPipeline**: Orchestrates the analysis workflow
 - **RealtimeLogs**: Live processing status updates
@@ -101,9 +104,11 @@ The frontend uses a modular component system:
 - **drizzle-kit**: Database migrations and introspection
 - **@replit/vite-plugin-runtime-error-modal**: Development error handling
 
-### File Processing
+### File Processing & URL Analysis
 - **multer**: Multipart form data handling
 - **react-dropzone**: Drag-and-drop file uploads
+- **axios**: HTTP client for fetching shared conversations
+- **cheerio**: Server-side HTML parsing for conversation extraction
 
 ## Deployment Strategy
 
