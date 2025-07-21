@@ -138,22 +138,31 @@ export class AgentOrchestrator {
 
     const messageContent = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
     
-    const systemPrompt = `You are a document structure analysis expert. Analyze the chat conversation and suggest a logical document structure with appropriate sections.`;
+    const systemPrompt = `You are a document structure analysis expert. You MUST respond with valid JSON only. No explanation text before or after the JSON.`;
     
     const prompt = `Analyze this conversation and suggest a document structure:
 
 ${messageContent}
 
-Provide a JSON response with:
-- sections: array of section names for the document
-- topicGroups: array of main topics discussed
-- insights: key structural insights
+You MUST respond with ONLY valid JSON in this exact format:
+{"sections": ["Section 1", "Section 2"], "topicGroups": ["Topic A", "Topic B"], "insights": ["Insight 1", "Insight 2"]}
 
-Format: {"sections": [...], "topicGroups": [...], "insights": [...]}`;
+Do not include any text before or after the JSON.`;
 
     try {
       const response = await aiService.smartCall(prompt, systemPrompt, 'openai');
-      const result = JSON.parse(response.content);
+      let result;
+      try {
+        result = JSON.parse(response.content);
+      } catch (parseError) {
+        // Try to extract JSON from the response if it's wrapped in text
+        const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error(`Invalid JSON response: ${response.content}`);
+        }
+      }
       
       await this.logMessage(analysisRunId, agentId, 'info', `AI identified ${result.sections?.length || 0} sections using ${response.model}`);
       
@@ -175,23 +184,30 @@ Format: {"sections": [...], "topicGroups": [...], "insights": [...]}`;
   private async runRequirementsAgent(messages: ChatMessage[], config: any, analysisRunId: number, agentId: number): Promise<any> {
     const messageContent = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
     
-    const systemPrompt = `You are a requirements analysis expert. Extract and categorize technical requirements from conversations.`;
+    const systemPrompt = `You are a requirements analysis expert. You MUST respond with valid JSON only. No explanation text before or after the JSON.`;
     
     const prompt = `Analyze this conversation and extract requirements:
 
 ${messageContent}
 
-Identify and categorize requirements as:
-- functional: What the system should do
-- non_functional: Performance, security, usability requirements  
-- technical: Implementation, architecture, technology requirements
+You MUST respond with ONLY valid JSON in this exact format:
+{"functional": ["req1", "req2"], "non_functional": ["req1", "req2"], "technical": ["req1", "req2"], "summary": "brief analysis"}
 
-Provide a JSON response:
-{"functional": [...], "non_functional": [...], "technical": [...], "summary": "brief analysis"}`;
+Do not include any text before or after the JSON.`;
 
     try {
       const response = await aiService.smartCall(prompt, systemPrompt, 'openai');
-      const result = JSON.parse(response.content);
+      let result;
+      try {
+        result = JSON.parse(response.content);
+      } catch (parseError) {
+        const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error(`Invalid JSON response: ${response.content}`);
+        }
+      }
       
       const totalRequirements = (result.functional?.length || 0) + (result.non_functional?.length || 0) + (result.technical?.length || 0);
       await this.logMessage(analysisRunId, agentId, 'info', `AI extracted ${totalRequirements} requirements using ${response.model}`);
@@ -215,24 +231,30 @@ Provide a JSON response:
   private async runUserPerspectiveAgent(messages: ChatMessage[], config: any, analysisRunId: number, agentId: number): Promise<any> {
     const messageContent = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
     
-    const systemPrompt = `You are a user experience expert. Analyze conversations to identify user perspectives, needs, and personas.`;
+    const systemPrompt = `You are a user experience expert. You MUST respond with valid JSON only. No explanation text before or after the JSON.`;
     
     const prompt = `Analyze this conversation from a user perspective:
 
 ${messageContent}
 
-Identify:
-- User personas mentioned or implied
-- User needs and pain points
-- User feedback and preferences
-- Experience requirements
+You MUST respond with ONLY valid JSON in this exact format:
+{"personas": ["persona1", "persona2"], "needs": ["need1", "need2"], "feedback": ["feedback1", "feedback2"], "insights": ["insight1", "insight2"]}
 
-Provide a JSON response:
-{"personas": [...], "needs": [...], "feedback": [...], "insights": [...]}`;
+Do not include any text before or after the JSON.`;
 
     try {
       const response = await aiService.smartCall(prompt, systemPrompt, 'anthropic');
-      const result = JSON.parse(response.content);
+      let result;
+      try {
+        result = JSON.parse(response.content);
+      } catch (parseError) {
+        const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error(`Invalid JSON response: ${response.content}`);
+        }
+      }
       
       await this.logMessage(analysisRunId, agentId, 'info', `AI identified ${result.personas?.length || 0} personas using ${response.model}`);
       
@@ -254,24 +276,30 @@ Provide a JSON response:
   private async runDocumentationAgent(messages: ChatMessage[], config: any, analysisRunId: number, agentId: number): Promise<any> {
     const messageContent = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
     
-    const systemPrompt = `You are a documentation expert. Analyze conversations to identify documentation gaps and generate content suggestions.`;
+    const systemPrompt = `You are a documentation expert. You MUST respond with valid JSON only. No explanation text before or after the JSON.`;
     
     const prompt = `Analyze this conversation for documentation needs:
 
 ${messageContent}
 
-Identify:
-- Missing documentation or context
-- Incomplete specifications
-- Areas needing clarification
-- Content that should be documented
+You MUST respond with ONLY valid JSON in this exact format:
+{"gaps": ["gap1", "gap2"], "suggestions": ["suggestion1", "suggestion2"], "priorities": ["priority1", "priority2"], "topics": ["topic1", "topic2"]}
 
-Provide a JSON response:
-{"gaps": [...], "suggestions": [...], "priorities": [...], "topics": [...]}`;
+Do not include any text before or after the JSON.`;
 
     try {
       const response = await aiService.smartCall(prompt, systemPrompt, 'anthropic');
-      const result = JSON.parse(response.content);
+      let result;
+      try {
+        result = JSON.parse(response.content);
+      } catch (parseError) {
+        const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error(`Invalid JSON response: ${response.content}`);
+        }
+      }
       
       await this.logMessage(analysisRunId, agentId, 'info', `AI identified ${result.gaps?.length || 0} documentation gaps using ${response.model}`);
       
@@ -294,24 +322,30 @@ Provide a JSON response:
   private async runMetaAgent(messages: ChatMessage[], config: any, analysisRunId: number, agentId: number): Promise<any> {
     const messageContent = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
     
-    const systemPrompt = `You are a meta-analysis expert. Provide high-level insights about conversation quality, patterns, and overall analysis.`;
+    const systemPrompt = `You are a meta-analysis expert. You MUST respond with valid JSON only. No explanation text before or after the JSON.`;
     
     const prompt = `Perform a meta-analysis of this conversation:
 
 ${messageContent}
 
-Analyze:
-- Overall conversation quality and depth
-- Communication patterns and dynamics
-- Key themes and recurring topics
-- Analysis completeness and gaps
+You MUST respond with ONLY valid JSON in this exact format:
+{"insights": ["insight1", "insight2"], "patterns": ["pattern1", "pattern2"], "themes": ["theme1", "theme2"], "quality_assessment": "brief quality assessment"}
 
-Provide a JSON response:
-{"insights": [...], "patterns": [...], "themes": [...], "quality_assessment": "..."}`;
+Do not include any text before or after the JSON.`;
 
     try {
       const response = await aiService.smartCall(prompt, systemPrompt, 'anthropic');
-      const result = JSON.parse(response.content);
+      let result;
+      try {
+        result = JSON.parse(response.content);
+      } catch (parseError) {
+        const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error(`Invalid JSON response: ${response.content}`);
+        }
+      }
       
       await this.logMessage(analysisRunId, agentId, 'info', `AI generated ${result.insights?.length || 0} meta insights using ${response.model}`);
       

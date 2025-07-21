@@ -15,7 +15,10 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['application/json', 'text/plain', 'text/markdown'];
-    if (allowedTypes.includes(file.mimetype)) {
+    const allowedExtensions = ['.json', '.txt', '.md'];
+    const extension = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+    
+    if (allowedTypes.includes(file.mimetype) || allowedExtensions.includes(extension)) {
       cb(null, true);
     } else {
       cb(new Error('Invalid file type. Only JSON, TXT, and Markdown files are allowed.'));
