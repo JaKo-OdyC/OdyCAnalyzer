@@ -25,7 +25,7 @@ The application follows a full-stack monorepo architecture with clear separation
 - **Runtime**: Node.js with TypeScript
 - **Framework**: Express.js for REST API
 - **File Upload**: Multer for handling multipart form data
-- **Database**: PostgreSQL with Drizzle ORM
+- **Database**: PostgreSQL with Drizzle ORM (migrated from in-memory storage)
 - **Schema Validation**: Zod for runtime type checking
 - **Development**: tsx for TypeScript execution in development
 
@@ -81,12 +81,21 @@ The frontend uses a modular component system:
 
 ## Data Flow
 
-1. **Upload Phase**: Files are uploaded, validated, and stored with metadata
-2. **Parsing Phase**: Background service extracts chat messages and metadata
-3. **Analysis Phase**: Agent orchestrator runs specialized agents in parallel
-4. **Aggregation Phase**: Results from all agents are combined and processed
+1. **Upload Phase**: Files are uploaded, validated, and stored with metadata in PostgreSQL database
+2. **Parsing Phase**: Background service extracts chat messages and metadata, persisted to database
+3. **Analysis Phase**: Agent orchestrator runs specialized agents in parallel, with logs stored
+4. **Aggregation Phase**: Results from all agents are combined and processed in database
 5. **Generation Phase**: Comprehensive documentation is generated in multiple formats
 6. **Export Phase**: Users can download reports as Markdown, JSON, or other formats
+
+## Recent Changes
+
+**January 21, 2025**: Successfully migrated from in-memory storage to PostgreSQL database
+- Created database configuration with Neon PostgreSQL driver  
+- Replaced MemStorage with DatabaseStorage class implementing IStorage interface
+- All data (files, messages, agents, analysis runs, logs) now persisted in database
+- Schema pushed to database using Drizzle migrations
+- Default agents automatically initialized on first database connection
 
 ## External Dependencies
 

@@ -45,27 +45,22 @@ export interface IStorage {
   getOutputsByAnalysisRunId(analysisRunId: number): Promise<DocumentationOutput[]>;
 }
 
-export class MemStorage implements IStorage {
-  private files: Map<number, UploadedFile> = new Map();
-  private messages: Map<number, ChatMessage> = new Map();
-  private agents: Map<number, Agent> = new Map();
-  private analysisRuns: Map<number, AnalysisRun> = new Map();
-  private logs: Map<number, AgentLog> = new Map();
-  private outputs: Map<number, DocumentationOutput> = new Map();
-  
-  private currentFileId = 1;
-  private currentMessageId = 1;
-  private currentAgentId = 1;
-  private currentRunId = 1;
-  private currentLogId = 1;
-  private currentOutputId = 1;
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
+export class DatabaseStorage implements IStorage {
   constructor() {
-    // Initialize default agents
+    // Initialize default agents on first run
     this.initializeDefaultAgents();
   }
 
-  private initializeDefaultAgents() {
+  private async initializeDefaultAgents() {
+    // Check if agents already exist
+    const existingAgents = await this.getAllAgents();
+    if (existingAgents.length > 0) {
+      return; // Agents already initialized
+    }
+
     const defaultAgents: InsertAgent[] = [
       {
         name: "Structure Agent",
@@ -104,176 +99,180 @@ export class MemStorage implements IStorage {
       }
     ];
 
-    defaultAgents.forEach(agent => {
-      this.createAgent(agent);
-    });
+    for (const agent of defaultAgents) {
+      await this.createAgent(agent);
+    }
   }
 
   // File operations
   async createFile(file: InsertFile): Promise<UploadedFile> {
-    const id = this.currentFileId++;
-    const newFile: UploadedFile = {
-      ...file,
-      id,
-      uploadedAt: new Date(),
-    };
-    this.files.set(id, newFile);
+    const [newFile] = await db
+      .insert(uploadedFiles)
+      .values(file)
+      .returning();
     return newFile;
   }
 
   async getFile(id: number): Promise<UploadedFile | undefined> {
-    return this.files.get(id);
+    const [file] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, id));
+    return file || undefined;
   }
 
   async getAllFiles(): Promise<UploadedFile[]> {
-    return Array.from(this.files.values()).sort((a, b) => 
-      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-    );
+    return await db.select().from(uploadedFiles).orderBy(uploadedFiles.uploadedAt);
   }
 
   async updateFileProcessed(id: number, processed: boolean, content?: string): Promise<void> {
-    const file = this.files.get(id);
-    if (file) {
-      this.files.set(id, { ...file, processed, content: content || file.content });
-    }
+    await db
+      .update(uploadedFiles)
+      .set({ processed, content })
+      .where(eq(uploadedFiles.id, id));
   }
 
   async deleteFile(id: number): Promise<void> {
-    this.files.delete(id);
-    // Delete associated messages
-    Array.from(this.messages.entries())
-      .filter(([, message]) => message.fileId === id)
-      .forEach(([messageId]) => this.messages.delete(messageId));
+    // Delete associated messages first
+    await db.delete(chatMessages).where(eq(chatMessages.fileId, id));
+    // Delete the file
+    await db.delete(uploadedFiles).where(eq(uploadedFiles.id, id));
   }
 
   // Chat message operations
   async createChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
-    const id = this.currentMessageId++;
-    const newMessage: ChatMessage = { ...message, id };
-    this.messages.set(id, newMessage);
+    const [newMessage] = await db
+      .insert(chatMessages)
+      .values(message)
+      .returning();
     return newMessage;
   }
 
   async getMessagesByFileId(fileId: number): Promise<ChatMessage[]> {
-    return Array.from(this.messages.values())
-      .filter(message => message.fileId === fileId)
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.fileId, fileId))
+      .orderBy(chatMessages.timestamp);
   }
 
   async getMessagesByTopic(topic: string): Promise<ChatMessage[]> {
-    return Array.from(this.messages.values())
-      .filter(message => message.topic === topic);
+    return await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.topic, topic));
   }
 
   // Agent operations
   async createAgent(agent: InsertAgent): Promise<Agent> {
-    const id = this.currentAgentId++;
-    const newAgent: Agent = { ...agent, id, lastRunAt: null };
-    this.agents.set(id, newAgent);
+    const [newAgent] = await db
+      .insert(agents)
+      .values(agent)
+      .returning();
     return newAgent;
   }
 
   async getAgent(id: number): Promise<Agent | undefined> {
-    return this.agents.get(id);
+    const [agent] = await db.select().from(agents).where(eq(agents.id, id));
+    return agent || undefined;
   }
 
   async getAllAgents(): Promise<Agent[]> {
-    return Array.from(this.agents.values());
+    return await db.select().from(agents);
   }
 
   async updateAgent(id: number, updates: Partial<Agent>): Promise<void> {
-    const agent = this.agents.get(id);
-    if (agent) {
-      this.agents.set(id, { ...agent, ...updates });
-    }
+    await db
+      .update(agents)
+      .set(updates)
+      .where(eq(agents.id, id));
   }
 
   async updateAgentLastRun(id: number): Promise<void> {
-    const agent = this.agents.get(id);
-    if (agent) {
-      this.agents.set(id, { ...agent, lastRunAt: new Date() });
-    }
+    await db
+      .update(agents)
+      .set({ lastRunAt: new Date() })
+      .where(eq(agents.id, id));
   }
 
   // Analysis run operations
   async createAnalysisRun(run: InsertAnalysisRun): Promise<AnalysisRun> {
-    const id = this.currentRunId++;
-    const newRun: AnalysisRun = {
-      ...run,
-      id,
-      startedAt: new Date(),
-      completedAt: null,
-    };
-    this.analysisRuns.set(id, newRun);
+    const [newRun] = await db
+      .insert(analysisRuns)
+      .values(run)
+      .returning();
     return newRun;
   }
 
   async getAnalysisRun(id: number): Promise<AnalysisRun | undefined> {
-    return this.analysisRuns.get(id);
+    const [run] = await db.select().from(analysisRuns).where(eq(analysisRuns.id, id));
+    return run || undefined;
   }
 
   async getAnalysisRunsByFileId(fileId: number): Promise<AnalysisRun[]> {
-    return Array.from(this.analysisRuns.values())
-      .filter(run => run.fileId === fileId)
-      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    return await db
+      .select()
+      .from(analysisRuns)
+      .where(eq(analysisRuns.fileId, fileId))
+      .orderBy(analysisRuns.startedAt);
   }
 
   async updateAnalysisRunStatus(id: number, status: string, results?: any): Promise<void> {
-    const run = this.analysisRuns.get(id);
-    if (run) {
-      this.analysisRuns.set(id, { ...run, status, results });
-    }
+    await db
+      .update(analysisRuns)
+      .set({ status, results })
+      .where(eq(analysisRuns.id, id));
   }
 
   async completeAnalysisRun(id: number, results: any): Promise<void> {
-    const run = this.analysisRuns.get(id);
-    if (run) {
-      this.analysisRuns.set(id, { 
-        ...run, 
+    await db
+      .update(analysisRuns)
+      .set({ 
         status: 'completed', 
         results, 
         completedAt: new Date() 
-      });
-    }
+      })
+      .where(eq(analysisRuns.id, id));
   }
 
   // Agent log operations
   async createAgentLog(log: InsertAgentLog): Promise<AgentLog> {
-    const id = this.currentLogId++;
-    const newLog: AgentLog = { ...log, id, timestamp: new Date() };
-    this.logs.set(id, newLog);
+    const [newLog] = await db
+      .insert(agentLogs)
+      .values(log)
+      .returning();
     return newLog;
   }
 
   async getLogsByAnalysisRunId(analysisRunId: number): Promise<AgentLog[]> {
-    return Array.from(this.logs.values())
-      .filter(log => log.analysisRunId === analysisRunId)
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return await db
+      .select()
+      .from(agentLogs)
+      .where(eq(agentLogs.analysisRunId, analysisRunId))
+      .orderBy(agentLogs.timestamp);
   }
 
   async getRecentLogs(limit = 50): Promise<AgentLog[]> {
-    return Array.from(this.logs.values())
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, limit);
+    return await db
+      .select()
+      .from(agentLogs)
+      .orderBy(agentLogs.timestamp)
+      .limit(limit);
   }
 
   // Documentation output operations
   async createDocumentationOutput(output: InsertDocumentationOutput): Promise<DocumentationOutput> {
-    const id = this.currentOutputId++;
-    const newOutput: DocumentationOutput = {
-      ...output,
-      id,
-      generatedAt: new Date(),
-    };
-    this.outputs.set(id, newOutput);
+    const [newOutput] = await db
+      .insert(documentationOutput)
+      .values(output)
+      .returning();
     return newOutput;
   }
 
   async getOutputsByAnalysisRunId(analysisRunId: number): Promise<DocumentationOutput[]> {
-    return Array.from(this.outputs.values())
-      .filter(output => output.analysisRunId === analysisRunId)
-      .sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
+    return await db
+      .select()
+      .from(documentationOutput)
+      .where(eq(documentationOutput.analysisRunId, analysisRunId))
+      .orderBy(documentationOutput.generatedAt);
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
