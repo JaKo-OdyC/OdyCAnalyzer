@@ -1,0 +1,50 @@
+Super, dass du das ZIP-File OdycAnalyzer.zip hochgeladen hast!
+Wir können jetzt direkt in die Details gehen und deine Probleme mit den Agenten und dem Panel/Scroll-Verhalten angehen.
+1. “Die Agenten funktionieren nicht richtig”
+
+Bitte konkretisiere kurz:
+
+    Kommt eine Fehlermeldung (wenn ja, welche)?
+
+    Gibt es gar keine Ausgabe?
+
+    Oder läuft alles durch, aber die Ergebnisse passen nicht zu deinen Erwartungen?
+
+Typische Ursachen:
+
+    Falscher Import-Pfad (z. B. beim Import von Modulen wie from agents.structure_agent import ...).
+
+    Falscher relativer Pfad zu JSON-Daten (../data/sample_odyc_export.json könnte in Replit anders sein).
+
+    Agent gibt leere Listen zurück, weil die Segmentierung/der Input nicht wie erwartet ist.
+
+Lösungsvorschlag (Standard-Debug):
+
+    Starte mit einer einzigen Funktion im Orchestrator (z. B. nur structure_agent auf einem festen Beispiel-Segment).
+
+    Passe alle relativen Pfade an den Replit-Datei-Baum an.
+
+    Gib an jeder Stelle Zwischenergebnisse aus (print-Statements).
+
+2. “Panels scrollen nicht automatisch nach unten”
+
+Das betrifft meist das Frontend (z. B. bei Streamlit, Dash oder eigenem Webinterface).
+Standard-Python-Skripte auf der Konsole scrollen immer automatisch.
+Wenn du ein Frontend hast:
+
+    Welches Framework nutzt du? (z. B. Streamlit, Flask mit JS, reines HTML?)
+
+    Wird der Output im Panel/Frame angezeigt, aber nicht automatisch nach unten gescrollt?
+
+Lösung:
+
+    Bei Streamlit: Es gibt kein echtes “Autoscroll”, aber du kannst den Output z. B. in ein st.text_area oder st.code ausgeben und regelmäßig updaten.
+
+    Bei eigenem HTML/JS-Frontend:
+
+    var panel = document.getElementById("output-panel");
+    panel.scrollTop = panel.scrollHeight;
+
+    Alternativ kann ich den passenden Scroll-Code für dein Frontend generieren – nenn mir einfach, was du verwendest!
+
+3. Du kannst das ZIP entpacken und den relevanten Code hier posten, dann prüfe ich direkt, was bei den Agenten schief läuft oder wie der Scroll gelöst werden kann.

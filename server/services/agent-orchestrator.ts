@@ -83,7 +83,7 @@ export class AgentOrchestrator {
 
     } catch (error) {
       await this.storage.updateAnalysisRunStatus(analysisRunId, 'failed');
-      await this.logMessage(analysisRunId, null, 'error', `Analysis failed: ${error.message}`);
+      await this.logMessage(analysisRunId, null, 'error', `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }
@@ -175,7 +175,7 @@ export class AgentOrchestrator {
     const personas: Record<string, string[]> = {};
 
     // Initialize personas
-    personaTypes.forEach(type => {
+    personaTypes.forEach((type: string) => {
       personas[type] = [];
     });
 
