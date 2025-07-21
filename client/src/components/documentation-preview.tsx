@@ -46,7 +46,7 @@ export default function DocumentationPreview() {
     }
 
     try {
-      const response = await fetch(`/api/analysis/${currentAnalysisId}/export/${selectedFormat}`);
+      const response = await fetch(`/api/analysis/${currentAnalysisId}/download/${selectedFormat}`);
       if (!response.ok) {
         throw new Error('Export failed');
       }
@@ -55,7 +55,7 @@ export default function DocumentationPreview() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `analysis-${currentAnalysisId}.${selectedFormat}`;
+      a.download = `analysis-${currentAnalysisId}-report.${selectedFormat === 'docx' ? 'docx' : selectedFormat}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -63,7 +63,7 @@ export default function DocumentationPreview() {
 
       toast({
         title: "Export successful",
-        description: "Your documentation has been downloaded.",
+        description: `Documentation downloaded as ${selectedFormat.toUpperCase()}.`,
       });
     } catch (error) {
       toast({
@@ -73,6 +73,15 @@ export default function DocumentationPreview() {
       });
     }
   };
+
+  const formatOptions = [
+    { value: "markdown", label: "Markdown (.md)", icon: "📝" },
+    { value: "html", label: "HTML (.html)", icon: "🌐" },
+    { value: "latex", label: "LaTeX (.tex)", icon: "📄" },
+    { value: "wiki", label: "Wiki (.wiki)", icon: "📚" },
+    { value: "docx", label: "Word (.docx)", icon: "📋" },
+    { value: "json", label: "JSON (.json)", icon: "💾" }
+  ];
 
   const formatContent = (content: string, format: string) => {
     if (format === 'json') {
@@ -101,13 +110,18 @@ export default function DocumentationPreview() {
           </div>
           <div className="flex items-center space-x-2">
             <Select value={selectedFormat} onValueChange={setSelectedFormat}>
-              <SelectTrigger className="w-32">
-                <SelectValue placeholder="Format" />
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select format" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="markdown">Markdown</SelectItem>
-                <SelectItem value="html">HTML</SelectItem>
-                <SelectItem value="json">JSON</SelectItem>
+                {formatOptions.map((format) => (
+                  <SelectItem key={format.value} value={format.value}>
+                    <span className="flex items-center gap-2">
+                      <span>{format.icon}</span>
+                      {format.label}
+                    </span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button

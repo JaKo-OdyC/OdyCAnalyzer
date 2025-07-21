@@ -225,6 +225,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Download documentation in specific format
+  app.get('/api/analysis/:id/download/:format', async (req, res) => {
+    try {
+      const analysisId = parseInt(req.params.id);
+      const format = req.params.format;
+      
+      const outputs = await storage.getOutputsByAnalysisRunId(analysisId);
+      const output = outputs.find((o: any) => o.format === format);
+      
+      if (!output) {
+        return res.status(404).json({ error: `Format ${format} not found` });
+      }
+
+      // Set appropriate headers for download
+      const filename = `analysis-${analysisId}-report.${format === 'docx' ? 'docx' : format}`;
+      
+      switch (format) {
+        case 'markdown':
+          res.setHeader('Content-Type', 'text/markdown');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          res.send(output.content);
+          break;
+          
+        case 'html':
+          res.setHeader('Content-Type', 'text/html');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          res.send(output.content);
+          break;
+          
+        case 'latex':
+          res.setHeader('Content-Type', 'application/x-latex');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          res.send(output.content);
+          break;
+          
+        case 'wiki':
+          res.setHeader('Content-Type', 'text/plain');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          res.send(output.content);
+          break;
+          
+        case 'docx':
+          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          const buffer = Buffer.from(output.content, 'base64');
+          res.send(buffer);
+          break;
+          
+        case 'json':
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          res.send(output.content);
+          break;
+          
+        default:
+          res.status(400).json({ error: 'Unsupported format' });
+      }
+    } catch (error) {
+      console.error('Error downloading documentation:', error);
+      res.status(500).json({ error: 'Failed to download documentation' });
+    }
+  });
+
   // Export documentation
   app.get("/api/analysis/:id/export/:format", async (req, res) => {
     try {

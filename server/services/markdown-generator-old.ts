@@ -2,6 +2,7 @@ import { ChatMessage } from "@shared/schema";
 import { marked } from 'marked';
 import TurndownService from 'turndown';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+import * as fs from 'fs/promises';
 
 export class MarkdownGenerator {
   private turndownService: TurndownService;
@@ -26,8 +27,8 @@ export class MarkdownGenerator {
     // Executive Summary
     sections.push('## Executive Summary');
     sections.push('');
-    sections.push('This report presents a comprehensive AI-powered analysis of the provided conversation data through specialized agents.');
-    sections.push('Each agent provides unique insights into different aspects of the discussion using advanced language models.');
+    sections.push('This report presents a comprehensive analysis of the provided conversation data through specialized AI agents.');
+    sections.push('Each agent provides unique insights into different aspects of the discussion.');
     sections.push('');
 
     // Structure Analysis
@@ -36,18 +37,11 @@ export class MarkdownGenerator {
       sections.push('');
       const structure = agentResults.structure;
       
-      if (structure.aiModel) {
-        sections.push(`*Analyzed using ${structure.aiModel} (${structure.aiProvider})*`);
-        sections.push('');
-      }
-      
-      if (structure.sections?.length > 0) {
-        sections.push('### Suggested Document Outline:');
-        structure.sections.forEach((section: string, index: number) => {
-          sections.push(`${index + 1}. ${section}`);
-        });
-        sections.push('');
-      }
+      sections.push('### Suggested Document Outline:');
+      structure.sections?.forEach((section: string, index: number) => {
+        sections.push(`${index + 1}. ${section}`);
+      });
+      sections.push('');
       
       sections.push('### Content Statistics:');
       sections.push(`- **Messages processed**: ${structure.messageCount || 0}`);
@@ -62,14 +56,6 @@ export class MarkdownGenerator {
         });
         sections.push('');
       }
-
-      if (structure.insights?.length > 0) {
-        sections.push('### AI Insights:');
-        structure.insights.forEach((insight: string, index: number) => {
-          sections.push(`${index + 1}. ${insight}`);
-        });
-        sections.push('');
-      }
     }
 
     // Requirements Analysis
@@ -78,41 +64,22 @@ export class MarkdownGenerator {
       sections.push('');
       const requirements = agentResults.requirements;
       
-      if (requirements.aiModel) {
-        sections.push(`*Analyzed using ${requirements.aiModel} (${requirements.aiProvider})*`);
-        sections.push('');
-      }
-      
       sections.push(`**Requirement density**: ${(requirements.requirementDensity * 100).toFixed(1)}% of messages contain requirement indicators`);
       sections.push('');
       
-      if (requirements.functional?.length > 0) {
-        sections.push('### Functional Requirements:');
-        requirements.functional.forEach((req: string, index: number) => {
+      if (requirements.requirements?.length > 0) {
+        sections.push('### Identified Requirements:');
+        requirements.requirements.forEach((req: string, index: number) => {
           sections.push(`${index + 1}. ${req}`);
         });
         sections.push('');
       }
 
-      if (requirements.nonFunctional?.length > 0) {
-        sections.push('### Non-Functional Requirements:');
-        requirements.nonFunctional.forEach((req: string, index: number) => {
-          sections.push(`${index + 1}. ${req}`);
+      if (requirements.requirementTypes?.length > 0) {
+        sections.push('### Requirement Categories:');
+        requirements.requirementTypes.forEach((type: string) => {
+          sections.push(`- **${type.charAt(0).toUpperCase() + type.slice(1)}**`);
         });
-        sections.push('');
-      }
-
-      if (requirements.technical?.length > 0) {
-        sections.push('### Technical Requirements:');
-        requirements.technical.forEach((req: string, index: number) => {
-          sections.push(`${index + 1}. ${req}`);
-        });
-        sections.push('');
-      }
-
-      if (requirements.summary) {
-        sections.push('### Analysis Summary:');
-        sections.push(requirements.summary);
         sections.push('');
       }
     }
@@ -123,39 +90,28 @@ export class MarkdownGenerator {
       sections.push('');
       const userPerspective = agentResults.user_perspective;
       
-      if (userPerspective.aiModel) {
-        sections.push(`*Analyzed using ${userPerspective.aiModel} (${userPerspective.aiProvider})*`);
-        sections.push('');
-      }
+      sections.push(`**Total user references**: ${userPerspective.totalUserReferences || 0}`);
+      sections.push('');
 
       if (userPerspective.personas?.length > 0) {
         sections.push('### Identified User Personas:');
-        userPerspective.personas.forEach((persona: string, index: number) => {
-          sections.push(`${index + 1}. ${persona}`);
+        userPerspective.personas.forEach((persona: any) => {
+          sections.push(`#### ${persona.persona.charAt(0).toUpperCase() + persona.persona.slice(1)}`);
+          sections.push(`- **Message count**: ${persona.messageCount}`);
+          if (persona.examples?.length > 0) {
+            sections.push('- **Example contexts**:');
+            persona.examples.forEach((example: string) => {
+              sections.push(`  - ${example}`);
+            });
+          }
+          sections.push('');
         });
-        sections.push('');
       }
 
-      if (userPerspective.userNeeds?.length > 0) {
-        sections.push('### User Needs and Pain Points:');
-        userPerspective.userNeeds.forEach((need: string, index: number) => {
-          sections.push(`${index + 1}. ${need}`);
-        });
-        sections.push('');
-      }
-
-      if (userPerspective.feedback?.length > 0) {
-        sections.push('### User Feedback:');
-        userPerspective.feedback.forEach((feedback: string, index: number) => {
-          sections.push(`${index + 1}. ${feedback}`);
-        });
-        sections.push('');
-      }
-
-      if (userPerspective.insights?.length > 0) {
-        sections.push('### UX Insights:');
-        userPerspective.insights.forEach((insight: string, index: number) => {
-          sections.push(`${index + 1}. ${insight}`);
+      if (userPerspective.userPerspectives?.length > 0) {
+        sections.push('### Key User Needs:');
+        userPerspective.userPerspectives.slice(0, 10).forEach((need: string, index: number) => {
+          sections.push(`${index + 1}. ${need.substring(0, 150)}${need.length > 150 ? '...' : ''}`);
         });
         sections.push('');
       }
@@ -167,34 +123,21 @@ export class MarkdownGenerator {
       sections.push('');
       const documentation = agentResults.documentation;
       
-      if (documentation.aiModel) {
-        sections.push(`*Analyzed using ${documentation.aiModel} (${documentation.aiProvider})*`);
-        sections.push('');
-      }
-      
       sections.push(`**Gap density**: ${(documentation.gapDensity * 100).toFixed(1)}% of messages indicate potential documentation gaps`);
       sections.push('');
 
-      if (documentation.gaps?.length > 0) {
+      if (documentation.documentationGaps?.length > 0) {
         sections.push('### Identified Documentation Gaps:');
-        documentation.gaps.forEach((gap: string, index: number) => {
-          sections.push(`${index + 1}. ${gap}`);
+        documentation.documentationGaps.slice(0, 10).forEach((gap: string, index: number) => {
+          sections.push(`${index + 1}. ${gap.substring(0, 200)}${gap.length > 200 ? '...' : ''}`);
         });
         sections.push('');
       }
 
-      if (documentation.suggestions?.length > 0) {
-        sections.push('### Documentation Suggestions:');
-        documentation.suggestions.forEach((suggestion: string, index: number) => {
-          sections.push(`${index + 1}. ${suggestion}`);
-        });
-        sections.push('');
-      }
-
-      if (documentation.priorities?.length > 0) {
-        sections.push('### Priority Areas:');
-        documentation.priorities.forEach((priority: string) => {
-          sections.push(`- **${priority.charAt(0).toUpperCase() + priority.slice(1)}**`);
+      if (documentation.gapTypes?.length > 0) {
+        sections.push('### Gap Categories:');
+        documentation.gapTypes.forEach((type: string) => {
+          sections.push(`- **${type.replace('_', ' ').charAt(0).toUpperCase() + type.replace('_', ' ').slice(1)}**`);
         });
         sections.push('');
       }
@@ -206,85 +149,69 @@ export class MarkdownGenerator {
       sections.push('');
       const meta = agentResults.meta;
       
-      if (meta.aiModel) {
-        sections.push(`*Analyzed using ${meta.aiModel} (${meta.aiProvider})*`);
-        sections.push('');
-      }
-      
-      if (meta.qualityAssessment) {
-        sections.push('### Overall Quality Assessment:');
-        sections.push(meta.qualityAssessment);
-        sections.push('');
-      }
-
       if (meta.messageStats) {
         sections.push('### Conversation Statistics:');
         sections.push(`- **Total messages**: ${meta.messageStats.total}`);
-        
+        sections.push(`- **Topic diversity**: ${meta.messageStats.topicCount} unique topics`);
+        sections.push(`- **Message ratio**: ${meta.messageStats.messageRatio} (user:assistant)`);
+        sections.push('');
+
         if (meta.messageStats.byRole) {
-          sections.push('- **Message Distribution by Role**:');
+          sections.push('### Message Distribution by Role:');
           Object.entries(meta.messageStats.byRole).forEach(([role, msgs]: [string, any]) => {
-            sections.push(`  - ${role}: ${msgs.length} messages`);
+            sections.push(`- **${role}**: ${msgs.length} messages`);
           });
+          sections.push('');
         }
+      }
+
+      if (meta.topWords?.length > 0) {
+        sections.push('### Most Frequent Terms:');
+        sections.push(`${meta.topWords.join(', ')}`);
         sections.push('');
       }
 
-      if (meta.patterns?.length > 0) {
-        sections.push('### Communication Patterns:');
-        meta.patterns.forEach((pattern: string, index: number) => {
-          sections.push(`${index + 1}. ${pattern}`);
-        });
-        sections.push('');
-      }
-
-      if (meta.themes?.length > 0) {
-        sections.push('### Recurring Themes:');
-        meta.themes.forEach((theme: string, index: number) => {
-          sections.push(`${index + 1}. ${theme}`);
-        });
-        sections.push('');
-      }
-
-      if (meta.insights?.length > 0) {
-        sections.push('### Meta Insights:');
-        meta.insights.forEach((insight: string, index: number) => {
+      if (meta.metaInsights?.length > 0) {
+        sections.push('### Key Insights:');
+        meta.metaInsights.forEach((insight: string, index: number) => {
           sections.push(`${index + 1}. ${insight}`);
         });
         sections.push('');
       }
+
+      sections.push(`**Analysis Quality**: ${meta.analysisQuality || 'standard'}`);
+      sections.push('');
     }
 
     // Recommendations
-    sections.push('## AI-Generated Recommendations');
+    sections.push('## Recommendations');
     sections.push('');
-    sections.push('Based on the comprehensive multi-agent analysis, the AI system recommends:');
+    sections.push('Based on the multi-agent analysis, we recommend:');
     sections.push('');
     
     if (agentResults.structure?.sections?.length > 0) {
-      sections.push('1. **Structure**: Follow the AI-suggested document outline to organize content effectively');
+      sections.push('1. **Structure**: Follow the suggested document outline to organize content effectively');
     }
     
-    if (agentResults.requirements?.functional?.length > 0 || agentResults.requirements?.technical?.length > 0) {
-      sections.push('2. **Requirements**: Review and formalize the AI-identified requirements');
+    if (agentResults.requirements?.requirements?.length > 0) {
+      sections.push('2. **Requirements**: Review and formalize the identified requirements');
     }
     
     if (agentResults.user_perspective?.personas?.length > 0) {
-      sections.push('3. **User Focus**: Consider the AI-identified user personas in future development');
+      sections.push('3. **User Focus**: Consider the identified user personas in future development');
     }
     
-    if (agentResults.documentation?.gaps?.length > 0) {
-      sections.push('4. **Documentation**: Address the AI-identified gaps to improve clarity');
+    if (agentResults.documentation?.documentationGaps?.length > 0) {
+      sections.push('4. **Documentation**: Address the identified gaps to improve clarity');
     }
     
-    sections.push('5. **Quality**: Continue leveraging AI-powered analysis for comprehensive understanding');
+    sections.push('5. **Quality**: Continue structured analysis for comprehensive understanding');
     sections.push('');
 
     // Footer
     sections.push('---');
     sections.push('');
-    sections.push('*This report was generated by the OdyC Multi-Agent AI Documentation Analyzer*');
-    sections.push(`*Analysis powered by OpenAI GPT-4 and Anthropic Claude-3.5-Sonnet*`);
+    sections.push('*This report was generated by the Multi-Agent Documentation Analyzer*');
 
     return sections.join('\n');
   }
@@ -358,13 +285,11 @@ export class MarkdownGenerator {
             background-color: #f8f9fa;
             font-weight: bold;
         }
-        .ai-attribution {
-            background: #e8f4fd;
-            padding: 10px;
-            border-radius: 5px;
-            font-style: italic;
-            color: #2980b9;
-            margin: 1em 0;
+        .agent-section {
+            margin: 2em 0;
+            padding: 20px;
+            border: 1px solid #e1e8ed;
+            border-radius: 8px;
         }
         strong { color: #2c3e50; }
         .generated-by {
@@ -375,22 +300,12 @@ export class MarkdownGenerator {
             color: #7f8c8d;
             text-align: center;
         }
-        .ai-powered {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-            margin: 2em 0;
-        }
     </style>
 </head>
 <body>
     ${htmlContent}
-    <div class="ai-powered">
-        <strong>AI-Powered Analysis</strong><br>
-        Generated by OdyC Multi-Agent Documentation Analyzer<br>
-        Using OpenAI GPT-4 and Anthropic Claude-3.5-Sonnet
+    <div class="generated-by">
+        Generated by OdyC Multi-Agent Documentation Analyzer
     </div>
 </body>
 </html>`;
@@ -429,17 +344,15 @@ export class MarkdownGenerator {
 \\usepackage{hyperref}
 \\usepackage{enumitem}
 \\usepackage{graphicx}
-\\usepackage{xcolor}
 
 \\geometry{margin=1in}
 \\pagestyle{fancy}
 \\fancyhf{}
-\\rhead{Multi-Agent AI Documentation Analysis}
+\\rhead{Multi-Agent Documentation Analysis}
 \\lhead{OdyC Analyzer Report}
 \\cfoot{\\thepage}
 
-\\title{Multi-Agent Documentation Analysis Report\\\\
-{\\large AI-Powered Analysis using GPT-4 and Claude-3.5-Sonnet}}
+\\title{Multi-Agent Documentation Analysis Report}
 \\author{OdyC Multi-Agent System}
 \\date{\\today}
 
@@ -450,13 +363,6 @@ export class MarkdownGenerator {
 \\newpage
 
 ${latexContent}
-
-\\vfill
-\\begin{center}
-\\textcolor{blue}{\\textbf{AI-Powered Analysis}}\\\\
-Generated by OdyC Multi-Agent Documentation Analyzer\\\\
-Using OpenAI GPT-4 and Anthropic Claude-3.5-Sonnet
-\\end{center}
 
 \\end{document}`;
   }
@@ -472,8 +378,7 @@ Using OpenAI GPT-4 and Anthropic Claude-3.5-Sonnet
       .replace(/`(.+?)`/g, '<code>$1</code>')
       .replace(/^- (.+)$/gm, '* $1')
       .replace(/^\d+\. (.+)$/gm, '# $1')
-      .replace(/\[(.+?)\]\((.+?)\)/g, '[[$2|$1]]')
-      + `\n\n{{AI-Powered}}\nGenerated by OdyC Multi-Agent Documentation Analyzer using OpenAI GPT-4 and Anthropic Claude-3.5-Sonnet\n{{/AI-Powered}}`;
+      .replace(/\[(.+?)\]\((.+?)\)/g, '[[$2|$1]]');
   }
 
   private async markdownToDocxParagraphs(markdownContent: string): Promise<Paragraph[]> {
@@ -540,5 +445,64 @@ Using OpenAI GPT-4 and Anthropic Claude-3.5-Sonnet
     }
 
     return paragraphs;
+  }
+    // Simple Markdown to HTML conversion
+    let html = markdownContent;
+
+    // Headers
+    html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+    html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+    html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+    html = html.replace(/^#### (.*$)/gm, '<h4>$1</h4>');
+
+    // Bold text
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // Italic text
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // Code blocks
+    html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+
+    // Lists
+    html = html.replace(/^- (.*$)/gm, '<li>$1</li>');
+    html = html.replace(/^(\d+)\. (.*$)/gm, '<li>$2</li>');
+
+    // Horizontal rules
+    html = html.replace(/^---$/gm, '<hr>');
+
+    // Line breaks
+    html = html.replace(/\n\n/g, '</p><p>');
+    html = html.replace(/\n/g, '<br>');
+
+    // Wrap in paragraphs
+    html = '<p>' + html + '</p>';
+
+    // Fix list wrapping
+    html = html.replace(/<p>(<li>.*?<\/li>)<\/p>/g, '<ul>$1</ul>');
+    html = html.replace(/<\/li><br><li>/g, '</li><li>');
+
+    // Basic HTML structure
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Multi-Agent Analysis Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
+        h1, h2, h3, h4 { color: #333; }
+        h1 { border-bottom: 2px solid #333; }
+        h2 { border-bottom: 1px solid #666; }
+        code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 3px; }
+        ul, ol { margin-left: 20px; }
+        hr { margin: 20px 0; }
+        .meta { color: #666; font-style: italic; }
+    </style>
+</head>
+<body>
+    ${html}
+</body>
+</html>`;
   }
 }
