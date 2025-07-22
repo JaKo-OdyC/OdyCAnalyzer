@@ -122,8 +122,26 @@ async function testAiApiConnectivity() {
         testResults.externalApis.push({ name: 'OpenAI', status: 'error', error: openAIResponse.data?.error?.message });
       }
     } catch (error) {
-      logResult('OpenAI API Connectivity', false, error.message);
-      testResults.externalApis.push({ name: 'OpenAI', status: 'error', error: error.message });
+      let errorDetails = error.message;
+      let status = 'error';
+      
+      // Distinguish between different types of errors
+      if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN') {
+        errorDetails = `Network connectivity issue: ${error.message} (This may be expected in sandboxed environments)`;
+        status = 'network_limited';
+      } else if (error.response?.status === 401) {
+        errorDetails = `Authentication failed: Please verify your OPENAI_API_KEY is valid and has sufficient credits`;
+        status = 'auth_error';
+      } else if (error.response?.status === 400) {
+        errorDetails = `Bad request: ${error.response.data?.error?.message || error.message}`;
+        status = 'client_error';
+      } else if (error.response?.status >= 500) {
+        errorDetails = `Server error: OpenAI API may be temporarily unavailable (${error.response.status})`;
+        status = 'server_error';
+      }
+      
+      logResult('OpenAI API Connectivity', false, errorDetails);
+      testResults.externalApis.push({ name: 'OpenAI', status, error: errorDetails });
     }
   }
   
@@ -155,8 +173,26 @@ async function testAiApiConnectivity() {
         testResults.externalApis.push({ name: 'Anthropic', status: 'error', error: anthropicResponse.data?.error?.message });
       }
     } catch (error) {
-      logResult('Anthropic API Connectivity', false, error.message);
-      testResults.externalApis.push({ name: 'Anthropic', status: 'error', error: error.message });
+      let errorDetails = error.message;
+      let status = 'error';
+      
+      // Distinguish between different types of errors
+      if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN') {
+        errorDetails = `Network connectivity issue: ${error.message} (This may be expected in sandboxed environments)`;
+        status = 'network_limited';
+      } else if (error.response?.status === 401) {
+        errorDetails = `Authentication failed: Please verify your ANTHROPIC_API_KEY is valid and has sufficient credits`;
+        status = 'auth_error';
+      } else if (error.response?.status === 400) {
+        errorDetails = `Bad request: ${error.response.data?.error?.message || error.message}`;
+        status = 'client_error';
+      } else if (error.response?.status >= 500) {
+        errorDetails = `Server error: Anthropic API may be temporarily unavailable (${error.response.status})`;
+        status = 'server_error';
+      }
+      
+      logResult('Anthropic API Connectivity', false, errorDetails);
+      testResults.externalApis.push({ name: 'Anthropic', status, error: errorDetails });
     }
   }
 }
@@ -186,8 +222,21 @@ async function testUrlProcessingConnectivity() {
         logResult(`URL Processing - ${testUrl}`, false, `HTTP ${response.status}`);
       }
     } catch (error) {
-      if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-        logWarning(`URL Processing - ${testUrl}`, 'Network connectivity issue - may be expected in sandboxed environment');
+      let shouldRetry = false;
+      let errorDetails = error.message;
+      
+      if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN') {
+        errorDetails = `Network connectivity issue: ${error.message} (Expected in sandboxed environments)`;
+        logWarning(`URL Processing - ${testUrl}`, errorDetails);
+      } else if (error.response?.status === 503) {
+        errorDetails = `Service unavailable (503): ${testUrl} may be temporarily down`;
+        logResult(`URL Processing - ${testUrl}`, false, errorDetails);
+      } else if (error.code === 'ECONNREFUSED') {
+        errorDetails = `Connection refused: ${testUrl} is not accepting connections`;
+        logResult(`URL Processing - ${testUrl}`, false, errorDetails);
+      } else if (error.code === 'ETIMEDOUT') {
+        errorDetails = `Request timeout: ${testUrl} is not responding`;
+        logResult(`URL Processing - ${testUrl}`, false, errorDetails);
       } else {
         logResult(`URL Processing - ${testUrl}`, false, error.message);
       }
