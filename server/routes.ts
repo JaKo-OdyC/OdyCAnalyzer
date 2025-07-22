@@ -97,10 +97,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get a specific file by ID
+  app.get("/api/files/:id", async (req, res) => {
+    try {
+      const fileId = parseInt(req.params.id);
+      
+      // Check if fileId is valid
+      if (isNaN(fileId)) {
+        return res.status(400).json({ message: "Invalid file ID" });
+      }
+      
+      const file = await storage.getFile(fileId);
+      
+      if (!file) {
+        return res.status(404).json({ message: "File not found" });
+      }
+
+      res.json(file);
+    } catch (error) {
+      console.error("Get file error:", error);
+      res.status(500).json({ message: "Failed to retrieve file" });
+    }
+  });
+
   // Delete a file
   app.delete("/api/files/:id", async (req, res) => {
     try {
       const fileId = parseInt(req.params.id);
+      
+      // Check if fileId is valid
+      if (isNaN(fileId)) {
+        return res.status(400).json({ message: "Invalid file ID" });
+      }
+      
+      // Check if the file exists first
+      const file = await storage.getFile(fileId);
+      if (!file) {
+        return res.status(404).json({ message: "File not found" });
+      }
+      
       await storage.deleteFile(fileId);
       res.json({ message: "File deleted successfully" });
     } catch (error) {
@@ -124,6 +159,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/agents/:id", async (req, res) => {
     try {
       const agentId = parseInt(req.params.id);
+      
+      // Check if agentId is valid
+      if (isNaN(agentId)) {
+        return res.status(400).json({ message: "Invalid agent ID" });
+      }
+      
+      // Check if the agent exists first
+      const existingAgent = await storage.getAgent(agentId);
+      if (!existingAgent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
       const updates = req.body;
       await storage.updateAgent(agentId, updates);
       const updatedAgent = await storage.getAgent(agentId);
@@ -195,6 +242,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/files/:fileId/analysis", async (req, res) => {
     try {
       const fileId = parseInt(req.params.fileId);
+      
+      // Check if fileId is valid
+      if (isNaN(fileId)) {
+        return res.status(400).json({ message: "Invalid file ID" });
+      }
+      
+      // Validate that the file exists first
+      const file = await storage.getFile(fileId);
+      if (!file) {
+        return res.status(404).json({ message: "File not found" });
+      }
+      
       const analysisRuns = await storage.getAnalysisRunsByFileId(fileId);
       res.json(analysisRuns);
     } catch (error) {
@@ -219,6 +278,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/analysis/:id/logs", async (req, res) => {
     try {
       const analysisId = parseInt(req.params.id);
+      
+      // Check if analysisId is valid
+      if (isNaN(analysisId)) {
+        return res.status(400).json({ message: "Invalid analysis ID" });
+      }
+      
+      // Validate that the analysis run exists first
+      const analysisRun = await storage.getAnalysisRun(analysisId);
+      if (!analysisRun) {
+        return res.status(404).json({ message: "Analysis run not found" });
+      }
+      
       const logs = await storage.getLogsByAnalysisRunId(analysisId);
       res.json(logs);
     } catch (error) {
@@ -231,6 +302,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/analysis/:id/output", async (req, res) => {
     try {
       const analysisId = parseInt(req.params.id);
+      
+      // Check if analysisId is valid
+      if (isNaN(analysisId)) {
+        return res.status(400).json({ message: "Invalid analysis ID" });
+      }
+      
+      // Validate that the analysis run exists first
+      const analysisRun = await storage.getAnalysisRun(analysisId);
+      if (!analysisRun) {
+        return res.status(404).json({ message: "Analysis run not found" });
+      }
+      
       const outputs = await storage.getOutputsByAnalysisRunId(analysisId);
       res.json(outputs);
     } catch (error) {
@@ -244,6 +327,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const analysisId = parseInt(req.params.id);
       const format = req.params.format;
+      
+      // Check if analysisId is valid
+      if (isNaN(analysisId)) {
+        return res.status(400).json({ message: "Invalid analysis ID" });
+      }
+      
+      // Validate that the analysis run exists first
+      const analysisRun = await storage.getAnalysisRun(analysisId);
+      if (!analysisRun) {
+        return res.status(404).json({ message: "Analysis run not found" });
+      }
       
       const outputs = await storage.getOutputsByAnalysisRunId(analysisId);
       const output = outputs.find((o: any) => o.format === format);
@@ -307,6 +401,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const analysisId = parseInt(req.params.id);
       const format = req.params.format;
+      
+      // Check if analysisId is valid
+      if (isNaN(analysisId)) {
+        return res.status(400).json({ message: "Invalid analysis ID" });
+      }
+      
+      // Validate that the analysis run exists first
+      const analysisRun = await storage.getAnalysisRun(analysisId);
+      if (!analysisRun) {
+        return res.status(404).json({ message: "Analysis run not found" });
+      }
       
       const outputs = await storage.getOutputsByAnalysisRunId(analysisId);
       const output = outputs.find(o => o.format === format);

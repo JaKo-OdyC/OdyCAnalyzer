@@ -11,6 +11,7 @@
     "db:push": "drizzle-kit push",
     "test:api": "node tests/api-integration.test.js",
     "test:comprehensive": "node tests/comprehensive-api-test.js",
+    "test:404": "node tests/404-handling.test.js",
     "test:install": "npm install form-data",
     "health": "curl -s http://localhost:5000/api/health | jq . || curl -s http://localhost:5000/api/health",
     "health:detailed": "curl -s 'http://localhost:5000/api/health?detailed=true' | jq . || curl -s 'http://localhost:5000/api/health?detailed=true'",
