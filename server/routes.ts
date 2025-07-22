@@ -167,6 +167,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/analysis/:id", async (req, res) => {
     try {
       const analysisId = parseInt(req.params.id);
+      
+      // Check if analysisId is valid
+      if (isNaN(analysisId)) {
+        return res.status(400).json({ message: "Invalid analysis ID" });
+      }
+      
       const analysisRun = await storage.getAnalysisRun(analysisId);
       
       if (!analysisRun) {
