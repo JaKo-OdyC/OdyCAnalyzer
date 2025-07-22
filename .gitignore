@@ -140,3 +140,7 @@ models/
 # Documentation build
 docs/_build/
 site/
+# API Test Results
+tests/api-test-results.json
+tests/*-results.json
+tests/test-*.json
