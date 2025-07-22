@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # OdyC Multi-Agent Documentation Analyzer
 
 A sophisticated AI-powered documentation analysis system that processes chat conversations and project data through specialized intelligent agents. The system generates comprehensive, structured documentation using multiple AI providers and offers flexible output formats.
@@ -218,3 +219,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with ❤️ for the documentation community**
+=======
+# OdyCAnalyzer
+>>>>>>> ff3c5eedba04e8b09bfac19057dd823595d5cd59
