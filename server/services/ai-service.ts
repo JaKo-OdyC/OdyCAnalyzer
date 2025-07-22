@@ -40,18 +40,39 @@ export class AIService {
     
     messages.push({ role: 'user', content: prompt });
 
-    const response = await this.openai.chat.completions.create({
-      model: 'gpt-4',
-      messages,
-      temperature: 0.7,
-      max_tokens: 2000,
-    });
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4',
+        messages,
+        temperature: 0.7,
+        max_tokens: 2000,
+      });
 
-    return {
-      content: response.choices[0]?.message?.content || '',
-      model: 'gpt-4',
-      provider: 'openai',
-    };
+      return {
+        content: response.choices[0]?.message?.content || '',
+        model: 'gpt-4',
+        provider: 'openai',
+      };
+    } catch (error: any) {
+      // Handle specific OpenAI API errors
+      if (error?.status === 401) {
+        const message = 'OpenAI API authentication failed. Please verify your OPENAI_API_KEY is valid and has sufficient credits.';
+        console.error(`[OpenAI API] ${message}`, { error: error?.message });
+        throw new Error(message);
+      } else if (error?.status === 400) {
+        const message = 'OpenAI API request invalid. Check your request parameters.';
+        console.error(`[OpenAI API] ${message}`, { error: error?.message });
+        throw new Error(`${message}: ${error?.message || 'Unknown error'}`);
+      } else if (error?.status >= 500) {
+        const message = 'OpenAI API server error. The service may be temporarily unavailable.';
+        console.error(`[OpenAI API] ${message}`, { error: error?.message, status: error?.status });
+        throw new Error(`${message}: ${error?.message || 'Unknown error'}`);
+      }
+      
+      // Re-throw other errors with additional context
+      console.error('[OpenAI API] Unexpected error:', error);
+      throw new Error(`OpenAI API error: ${error?.message || 'Unknown error'}`);
+    }
   }
 
   async callAnthropic(prompt: string, systemPrompt?: string): Promise<AIResponse> {
@@ -59,29 +80,50 @@ export class AIService {
       throw new Error('Anthropic API key not configured');
     }
 
-    const response = await this.anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 2000,
-      temperature: 0.7,
-      system: systemPrompt || 'You are a helpful AI assistant specializing in document analysis.',
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-    });
+    try {
+      const response = await this.anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 2000,
+        temperature: 0.7,
+        system: systemPrompt || 'You are a helpful AI assistant specializing in document analysis.',
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      });
 
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response type from Anthropic');
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        throw new Error('Unexpected response type from Anthropic');
+      }
+
+      return {
+        content: content.text,
+        model: 'claude-3-5-sonnet-20241022',
+        provider: 'anthropic',
+      };
+    } catch (error: any) {
+      // Handle specific Anthropic API errors
+      if (error?.status === 401) {
+        const message = 'Anthropic API authentication failed. Please verify your ANTHROPIC_API_KEY is valid and has sufficient credits.';
+        console.error(`[Anthropic API] ${message}`, { error: error?.message });
+        throw new Error(message);
+      } else if (error?.status === 400) {
+        const message = 'Anthropic API request invalid. Check your request parameters.';
+        console.error(`[Anthropic API] ${message}`, { error: error?.message });
+        throw new Error(`${message}: ${error?.message || 'Unknown error'}`);
+      } else if (error?.status >= 500) {
+        const message = 'Anthropic API server error. The service may be temporarily unavailable.';
+        console.error(`[Anthropic API] ${message}`, { error: error?.message, status: error?.status });
+        throw new Error(`${message}: ${error?.message || 'Unknown error'}`);
+      }
+      
+      // Re-throw other errors with additional context
+      console.error('[Anthropic API] Unexpected error:', error);
+      throw new Error(`Anthropic API error: ${error?.message || 'Unknown error'}`);
     }
-
-    return {
-      content: content.text,
-      model: 'claude-3-5-sonnet-20241022',
-      provider: 'anthropic',
-    };
   }
 
   async smartCall(prompt: string, systemPrompt?: string, preferredProvider?: 'openai' | 'anthropic'): Promise<AIResponse> {

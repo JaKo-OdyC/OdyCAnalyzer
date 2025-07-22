@@ -196,13 +196,31 @@ export class ApiMonitor {
           error: `HTTP ${response.status}: ${response.data?.error?.message || 'Unknown error'}`
         };
       }
-    } catch (error) {
+    } catch (error: any) {
+      let errorMessage = 'Unknown OpenAI error';
+      let status: ApiHealthStatus['status'] = 'unhealthy';
+      
+      if (error?.response?.status === 401) {
+        errorMessage = 'Authentication failed. Please verify your OPENAI_API_KEY is valid and has sufficient credits.';
+        status = 'not_configured';
+      } else if (error?.response?.status >= 400 && error?.response?.status < 500) {
+        errorMessage = `Client error (${error.response.status}): ${error.response.data?.error?.message || 'Invalid request'}`;
+      } else if (error?.response?.status >= 500) {
+        errorMessage = `Server error (${error.response.status}): OpenAI API may be temporarily unavailable`;
+        status = 'degraded';
+      } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        errorMessage = 'Network connectivity issue. Cannot reach OpenAI API.';
+        status = 'degraded';
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
       return {
         service: 'openai',
-        status: 'unhealthy',
+        status,
         lastChecked: new Date(),
         responseTime: Date.now() - startTime,
-        error: error instanceof Error ? error.message : 'Unknown OpenAI error'
+        error: errorMessage
       };
     }
   }
@@ -257,13 +275,31 @@ export class ApiMonitor {
           error: `HTTP ${response.status}: ${response.data?.error?.message || 'Unknown error'}`
         };
       }
-    } catch (error) {
+    } catch (error: any) {
+      let errorMessage = 'Unknown Anthropic error';
+      let status: ApiHealthStatus['status'] = 'unhealthy';
+      
+      if (error?.response?.status === 401) {
+        errorMessage = 'Authentication failed. Please verify your ANTHROPIC_API_KEY is valid and has sufficient credits.';
+        status = 'not_configured';
+      } else if (error?.response?.status >= 400 && error?.response?.status < 500) {
+        errorMessage = `Client error (${error.response.status}): ${error.response.data?.error?.message || 'Invalid request'}`;
+      } else if (error?.response?.status >= 500) {
+        errorMessage = `Server error (${error.response.status}): Anthropic API may be temporarily unavailable`;
+        status = 'degraded';
+      } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        errorMessage = 'Network connectivity issue. Cannot reach Anthropic API.';
+        status = 'degraded';
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
       return {
         service: 'anthropic',
-        status: 'unhealthy',
+        status,
         lastChecked: new Date(),
         responseTime: Date.now() - startTime,
-        error: error instanceof Error ? error.message : 'Unknown Anthropic error'
+        error: errorMessage
       };
     }
   }
@@ -274,46 +310,81 @@ export class ApiMonitor {
   private async checkUrlProcessingHealth(): Promise<ApiHealthStatus> {
     const startTime = Date.now();
     
-    try {
-      // Test basic HTTP connectivity using a reliable endpoint
-      const response = await axios({
-        method: 'GET',
-        url: 'https://httpbin.org/status/200',
-        timeout: 5000,
-        headers: {
-          'User-Agent': 'OdyCAnalyzer/1.0'
-        }
-      });
+    // Test URLs in order of preference (fallback endpoints if httpbin is unavailable)
+    const testUrls = [
+      'https://httpbin.org/status/200',
+      'https://jsonplaceholder.typicode.com/posts/1',
+      'https://api.github.com',
+      'https://example.com'
+    ];
+    
+    let lastError: Error | null = null;
+    
+    for (const testUrl of testUrls) {
+      try {
+        const response = await axios({
+          method: 'GET',
+          url: testUrl,
+          timeout: 8000, // Shorter timeout for health checks
+          headers: {
+            'User-Agent': 'OdyCAnalyzer/1.0'
+          }
+        });
 
-      if (response.status === 200) {
-        return {
-          service: 'url_processing',
-          status: 'healthy',
-          lastChecked: new Date(),
-          responseTime: Date.now() - startTime,
-          details: 'HTTP connectivity working'
-        };
-      } else {
-        return {
-          service: 'url_processing',
-          status: 'degraded',
-          lastChecked: new Date(),
-          responseTime: Date.now() - startTime,
-          error: `HTTP ${response.status}`
-        };
+        if (response.status === 200) {
+          return {
+            service: 'url_processing',
+            status: 'healthy',
+            lastChecked: new Date(),
+            responseTime: Date.now() - startTime,
+            details: {
+              endpoint: testUrl,
+              message: 'HTTP connectivity working'
+            }
+          };
+        }
+      } catch (error: any) {
+        lastError = error;
+        console.log(`URL processing health check failed for ${testUrl}: ${error?.message}`);
+        
+        // Continue to next URL unless it's the last one
+        if (testUrl !== testUrls[testUrls.length - 1]) {
+          continue;
+        }
       }
-    } catch (error) {
-      // In sandboxed environments, external connectivity may be limited
-      // This should be considered degraded rather than unhealthy
-      return {
-        service: 'url_processing',
-        status: 'degraded',
-        lastChecked: new Date(),
-        responseTime: Date.now() - startTime,
-        error: error instanceof Error ? error.message : 'Network connectivity limited',
-        details: 'May be expected in sandboxed environments'
-      };
     }
+    
+    // All endpoints failed
+    let errorMessage = 'Network connectivity limited';
+    let status: ApiHealthStatus['status'] = 'degraded';
+    
+    if (lastError) {
+      if (lastError.code === 'ENOTFOUND' || lastError.code === 'EAI_AGAIN') {
+        errorMessage = 'DNS resolution failed. Network connectivity may be limited.';
+        status = 'degraded'; // In sandboxed environments, this is expected
+      } else if (lastError.code === 'ECONNREFUSED') {
+        errorMessage = 'Connection refused. External services may be blocked.';
+        status = 'degraded';
+      } else if (lastError.code === 'ETIMEDOUT') {
+        errorMessage = 'Request timeout. Network may be slow or restricted.';
+        status = 'degraded';
+      } else {
+        errorMessage = `Network error: ${lastError.message}`;
+        status = 'unhealthy';
+      }
+    }
+    
+    return {
+      service: 'url_processing',
+      status,
+      lastChecked: new Date(),
+      responseTime: Date.now() - startTime,
+      error: errorMessage,
+      details: {
+        testedEndpoints: testUrls,
+        message: 'External connectivity issues may be expected in sandboxed environments'
+      }
+    };
   }
 
   /**

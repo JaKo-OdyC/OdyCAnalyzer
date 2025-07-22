@@ -57,33 +57,71 @@ export class UrlProcessor {
   }
 
   private async extractContentFromUrl(url: string): Promise<string> {
-    try {
-      // Set user agent to mimic a real browser
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate',
-          'Connection': 'keep-alive',
-        },
-        timeout: 30000, // 30 second timeout
-      });
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 second
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Set user agent to mimic a real browser
+        const response = await axios.get(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+          },
+          timeout: 30000, // 30 second timeout
+        });
 
-      const html = response.data;
-      const $ = cheerio.load(html);
+        const html = response.data;
+        const $ = cheerio.load(html);
 
-      // Check if this is a ChatGPT share link
-      if (url.includes('chatgpt.com/share/')) {
-        return this.extractChatGPTContent($);
+        // Check if this is a ChatGPT share link
+        if (url.includes('chatgpt.com/share/')) {
+          return this.extractChatGPTContent($);
+        }
+
+        // Generic content extraction
+        return this.extractGenericContent($);
+      } catch (error: any) {
+        console.error(`URL fetch attempt ${attempt}/${maxRetries} failed:`, error?.message);
+        
+        // If this is the last attempt, throw the error
+        if (attempt === maxRetries) {
+          let errorMessage = 'Failed to fetch content from URL';
+          
+          if (error?.response?.status === 503) {
+            errorMessage = `Service unavailable (503). The target website may be temporarily down or blocking requests.`;
+          } else if (error?.response?.status >= 400) {
+            errorMessage = `HTTP ${error.response.status}: ${error.response.statusText || 'Client/Server error'}`;
+          } else if (error.code === 'ENOTFOUND') {
+            errorMessage = `Domain not found. Please check the URL: ${url}`;
+          } else if (error.code === 'ECONNREFUSED') {
+            errorMessage = `Connection refused. The target server may be down or not accepting connections.`;
+          } else if (error.code === 'ETIMEDOUT') {
+            errorMessage = `Request timed out. The target server may be slow or unresponsive.`;
+          } else if (error instanceof Error) {
+            errorMessage = `Network error: ${error.message}`;
+          }
+          
+          console.error('Error fetching URL content:', errorMessage);
+          throw new Error(errorMessage);
+        }
+        
+        // Wait before retrying (exponential backoff)
+        if (error?.response?.status === 503 || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+          const delay = baseDelay * Math.pow(2, attempt - 1);
+          console.log(`Retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          // Don't retry for non-retriable errors (like 404, 401, etc.)
+          throw error;
+        }
       }
-
-      // Generic content extraction
-      return this.extractGenericContent($);
-    } catch (error) {
-      console.error('Error fetching URL content:', error);
-      throw new Error(`Failed to fetch content from URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+    
+    throw new Error('All retry attempts failed');
   }
 
   private extractChatGPTContent($: cheerio.CheerioAPI): string {
