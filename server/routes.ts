@@ -5,6 +5,7 @@ import { insertFileSchema, insertAnalysisRunSchema, urlAnalysisSchema } from "@s
 import { AgentOrchestrator } from "./services/agent-orchestrator";
 import { FileProcessor } from "./services/file-processor";
 import { UrlProcessor } from "./services/url-processor";
+import { ApiMonitor } from "./services/api-monitor";
 import multer from "multer";
 import { z } from "zod";
 
@@ -29,6 +30,10 @@ const upload = multer({
 const orchestrator = new AgentOrchestrator(storage);
 const fileProcessor = new FileProcessor(storage);
 const urlProcessor = new UrlProcessor(storage);
+const apiMonitor = new ApiMonitor(storage);
+
+// Start API monitoring (check every 5 minutes)
+apiMonitor.startMonitoring(300000);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // File upload endpoint
@@ -322,6 +327,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Export error:", error);
       res.status(500).json({ message: "Failed to export documentation" });
+    }
+  });
+
+  // Enhanced health check endpoint with comprehensive monitoring
+  app.get("/api/health", async (req, res) => {
+    try {
+      const detailed = req.query.detailed === 'true';
+      
+      if (detailed) {
+        // Perform fresh health checks for all services
+        const healthStatus = await apiMonitor.checkAllServices();
+        res.json(healthStatus);
+      } else {
+        // Return cached health status
+        const healthStatus = apiMonitor.getHealthStatus();
+        res.json({
+          status: healthStatus.overall,
+          timestamp: healthStatus.lastUpdate.toISOString(),
+          services: healthStatus.services.length
+        });
+      }
+    } catch (error) {
+      console.error("Health check error:", error);
+      res.status(500).json({ 
+        status: 'unhealthy',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Get detailed health report
+  app.get("/api/health/report", async (req, res) => {
+    try {
+      const report = apiMonitor.generateHealthReport();
+      res.setHeader('Content-Type', 'text/plain');
+      res.send(report);
+    } catch (error) {
+      console.error("Health report error:", error);
+      res.status(500).json({ message: "Failed to generate health report" });
+    }
+  });
+
+  // API connectivity test endpoint
+  app.post("/api/health/test", async (req, res) => {
+    try {
+      const { service } = req.body;
+      
+      if (!service) {
+        return res.status(400).json({ message: "Service parameter required" });
+      }
+
+      const healthStatus = await apiMonitor.checkAllServices();
+      const serviceStatus = healthStatus.services.find(s => s.service === service);
+      
+      if (!serviceStatus) {
+        return res.status(404).json({ message: `Service '${service}' not found` });
+      }
+
+      res.json(serviceStatus);
+    } catch (error) {
+      console.error("Service test error:", error);
+      res.status(500).json({ message: "Failed to test service" });
+    }
+  });
+
+  // API info endpoint
+  app.get("/api/info", async (req, res) => {
+    try {
+      const info = {
+        name: 'OdyCAnalyzer API',
+        version: '1.0.0',
+        description: 'Multi-Agent Documentation Analyzer API',
+        endpoints: {
+          files: '/api/files',
+          analysis: '/api/analysis',
+          agents: '/api/agents',
+          logs: '/api/logs',
+          health: '/api/health'
+        },
+        externalServices: {
+          openai: !!process.env.OPENAI_API_KEY,
+          anthropic: !!process.env.ANTHROPIC_API_KEY,
+          database: !!process.env.DATABASE_URL
+        }
+      };
+
+      res.json(info);
+    } catch (error) {
+      console.error("API info error:", error);
+      res.status(500).json({ message: "Failed to retrieve API info" });
     }
   });
 
